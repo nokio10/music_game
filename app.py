@@ -117,9 +117,10 @@ def admin_start():
     game.current_phase = 'idle'
     game.inputs_enabled = False
     game.final_results = None
-    for pid in game.players:
-        game.players[pid]['score'] = 0
-        game.players[pid]['last_answer'] = None
+    
+    game.players = {}
+    game.player_names_map = {} 
+    
     _broadcast_admin_info()
     socketio.emit('game_reset', to='players')
 
