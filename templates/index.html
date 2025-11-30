@@ -120,7 +120,10 @@
         socket.on('game_reset', () => {
              document.getElementById('gameEndOverlay').style.display = 'none';
              document.querySelector('.main-game-interface').style.display = 'block';
-             showScreen('waitBlock');
+             localStorage.removeItem('music_game_name'); 
+             myName = '';
+             document.getElementById('usernameInput').value = '';
+             showScreen('loginBlock');
         });
 
         socket.on('game_over', (data) => {
