@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ЧО? ЗА? ТРЕК?</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        .sticky-header {
+            position: fixed; top: 0; left: 0; width: 100%;
+            background-color: #212529; color: #ffc107; text-align: center;
+            padding: 10px 0; z-index: 1000; border-bottom: 2px solid #ffc107;
+            font-weight: 900; font-size: 1.2rem; text-transform: uppercase;
+        }
+        .game-container { max-width: 600px; margin: 0 auto; padding-top: 80px; padding-bottom: 50px; }
+        .hidden { display: none !important; }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+        .pulse-text { animation: pulse 1.5s infinite; font-size: 1.2em; color: #ffc107; }
+        .leaderboard-row { font-size: 0.9em; }
+        .current-player-row { background-color: rgba(255, 193, 7, 0.2); font-weight: bold; }
+
+        /* --- Финал --- */
+        #gameEndOverlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(33, 37, 41, 0.98); z-index: 2000;
+            color: white; overflow-y: auto; padding-top: 60px;
+            text-align: center;
+        }
+        canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1500; }
+        .winner-msg { font-size: 2rem; color: #ffc107; font-weight: bold; margin-bottom: 10px; }
+    </style>
+</head>
+<body class="bg-dark text-white">
+    <canvas id="fireworksCanvas"></canvas>
+    <div class="sticky-header">🎧 ЧО? ЗА? ТРЕК? 🎶</div>
+
+    <!-- ФИНАЛЬНЫЙ ЭКРАН -->
+    <div id="gameEndOverlay">
+        <div class="container">
+            <h2 class="mb-3">🏁 Игра завершена! 🏁</h2>
+            
+            <div id="winnerTextBlock" class="mb-4"></div>
+
+            <div class="card bg-secondary p-3 mx-auto" style="max-width: 500px;">
+                <h5 class="text-white-50">Итоговая таблица</h5>
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>#</th><th>Имя</th><th>Баллы</th></tr></thead>
+                    <tbody id="finalLeaderboard"></tbody>
+                </table>
+            </div>
+            <p class="mt-4 text-muted">Спасибо за игру!</p>
+        </div>
+    </div>
+
+    <!-- ОСНОВНОЙ КОНТЕЙНЕР -->
+    <div class="container game-container main-game-interface">
+        
+        <div id="loginBlock" class="card bg-secondary p-4">
+            <h3 class="text-center mb-3">Введите ваше имя</h3>
+            <input type="text" id="usernameInput" class="form-control mb-3" placeholder="Имя">
+            <button onclick="joinGame()" class="btn btn-primary w-100">Войти в игру</button>
+        </div>
+
+        <div id="waitBlock" class="text-center hidden mt-5">
+            <h3>Ожидание начала раунда...</h3>
+            <div class="spinner-border text-light" role="status"></div>
+            <p class="mt-3 text-muted">Смотрите на экран ведущего</p>
+        </div>
+
+        <div id="questionBlock" class="card bg-secondary p-3 hidden">
+            <h5 class="text-center mb-3">Как заканчивается строка из трека №<span id="qIndex"></span>? <br><small class="text-warning">(цена: <span id="qPoints"></span> балл.)</small></h5>
+            <div id="listeningMessage" class="text-center py-4">
+                <div class="pulse-text">🎧 Слушайте трек...</div>
+                <small class="text-white-50">Ввод ответа появится после окончания музыки</small>
+            </div>
+            <div id="interactionContainer" class="hidden">
+                <div id="optionsArea" class="d-grid gap-2 mb-2"></div>
+                <div id="inputArea" class="hidden">
+                    <input type="text" id="textAnswer" class="form-control mb-2" placeholder="Ваш ответ...">
+                    <button onclick="submitText()" class="btn btn-warning w-100">Отправить</button>
+                </div>
+            </div>
+            <p id="answerStatus" class="text-center mt-2 text-warning hidden">Ответ принят!</p>
+        </div>
+
+        <div id="resultBlock" class="card bg-secondary p-3 hidden mt-3">
+            <div id="resultCardHeader" class="card p-3 mb-3">
+                <h5 class="text-center">Правильный ответ:</h5>
+                <h3 class="text-center" id="correctAnswerText"></h3>
+                <hr>
+                <h4 class="text-center" id="pointsEarnedText"></h4>
+            </div>
+            <h5 class="text-center mt-2">Турнирная таблица</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-sm">
+                    <thead><tr><th>#</th><th>Имя</th><th class="text-end">Очки</th></tr></thead>
+                    <tbody id="leaderboardBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let myName = localStorage.getItem('music_game_name') || '';
+        if (myName) document.getElementById('usernameInput').value = myName;
+
+        function joinGame() {
+            const name = document.getElementById('usernameInput').value;
+            if(!name) return alert('Введите имя!');
+            myName = name;
+            localStorage.setItem('music_game_name', name);
+            socket.emit('join_game', {name: name});
+            document.getElementById('loginBlock').classList.add('hidden');
+            document.getElementById('waitBlock').classList.remove('hidden');
+        }
+
+        socket.on('game_reset', () => {
+             document.getElementById('gameEndOverlay').style.display = 'none';
+             document.querySelector('.main-game-interface').style.display = 'block';
+             showScreen('waitBlock');
+        });
+
+        socket.on('game_over', (data) => {
+            showEndScreen(data);
+        });
+
+        function showEndScreen(data) {
+            document.querySelector('.main-game-interface').style.display = 'none';
+            document.getElementById('gameEndOverlay').style.display = 'block';
+            
+            const txtBlock = document.getElementById('winnerTextBlock');
+            const winners = data.winners || [];
+            
+            if (winners.length > 0) {
+                // Проверяем, есть ли я в списке победителей
+                const amIWinner = winners.some(w => w.name === myName);
+                
+                if (amIWinner) {
+                    txtBlock.innerHTML = `<div class="winner-msg">🏆 ВЫ ПОБЕДИЛИ! 🏆</div><h3>Ваш счет: ${winners[0].score}</h3>`;
+                    startFireworks();
+                } else {
+                    const names = winners.map(w => w.name).join(', ');
+                    txtBlock.innerHTML = `<h3>Победители: <span class="text-warning">${names}</span></h3><h4>Счет: ${winners[0].score}</h4>`;
+                }
+            } else {
+                txtBlock.innerHTML = "<h3>Победителей нет</h3>";
+            }
+
+            const tbody = document.getElementById('finalLeaderboard');
+            tbody.innerHTML = '';
+            data.leaderboard.forEach((p, index) => {
+                let rowClass = (p.name === myName) ? 'table-warning text-dark fw-bold' : '';
+                tbody.innerHTML += `<tr class="${rowClass}"><td>${index+1}</td><td>${p.name}</td><td>${p.score}</td></tr>`;
+            });
+        }
+
+        socket.on('new_question', (data) => {
+            showScreen('questionBlock');
+            document.getElementById('qIndex').innerText = data.index;
+            document.getElementById('qPoints').innerText = data.points; 
+            document.getElementById('answerStatus').classList.add('hidden');
+            document.getElementById('resultBlock').classList.add('hidden');
+            document.getElementById('listeningMessage').classList.remove('hidden');
+            document.getElementById('interactionContainer').classList.add('hidden');
+            const optionsArea = document.getElementById('optionsArea');
+            const inputArea = document.getElementById('inputArea');
+            optionsArea.innerHTML = '';
+            inputArea.classList.add('hidden');
+            if (data.type === 'choice') {
+                optionsArea.classList.remove('hidden');
+                data.options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-outline-light btn-lg';
+                    btn.innerText = opt;
+                    btn.onclick = () => submitChoice(opt);
+                    optionsArea.appendChild(btn);
+                });
+            } else {
+                optionsArea.classList.add('hidden');
+                inputArea.classList.remove('hidden');
+                document.getElementById('textAnswer').value = '';
+                document.getElementById('textAnswer').disabled = false;
+            }
+        });
+
+        socket.on('allow_answers', () => {
+            document.getElementById('listeningMessage').classList.add('hidden');
+            document.getElementById('interactionContainer').classList.remove('hidden');
+        });
+
+        socket.on('show_answer_client', (data) => {
+            document.getElementById('questionBlock').classList.add('hidden');
+            document.getElementById('resultBlock').classList.remove('hidden');
+            document.getElementById('correctAnswerText').innerText = data.answer;
+            const myPoints = data.deltas[myName] || 0;
+            const ptsText = document.getElementById('pointsEarnedText');
+            const cardHeader = document.getElementById('resultCardHeader');
+            if (myPoints > 0) {
+                cardHeader.className = 'card bg-success p-3 mb-3';
+                ptsText.innerText = `Вы заработали +${myPoints} балл(ов)! 🎉`;
+                ptsText.className = 'text-center text-warning fw-bold';
+            } else {
+                cardHeader.className = 'card bg-danger p-3 mb-3';
+                ptsText.innerText = `Вы не заработали баллов 😢`;
+                ptsText.className = 'text-center text-white';
+            }
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+            data.leaderboard.forEach((p, index) => {
+                const tr = document.createElement('tr');
+                if (p.name === myName) tr.classList.add('current-player-row');
+                tr.innerHTML = `<td>${index + 1}</td><td>${p.name}</td><td class="text-end">${p.score}</td>`;
+                tbody.appendChild(tr);
+            });
+        });
+
+        socket.on('game_status', (data) => {
+            if(data.state === 'finished' && data.final_results) {
+                showEndScreen(data.final_results);
+                return;
+            }
+            if(data.state === 'question') {
+                 showScreen('questionBlock');
+                 if(data.question_data) {
+                    document.getElementById('qIndex').innerText = data.question_data.index;
+                    document.getElementById('qPoints').innerText = data.question_data.points;
+                    if (data.inputs_enabled) {
+                        document.getElementById('listeningMessage').classList.add('hidden');
+                        document.getElementById('interactionContainer').classList.remove('hidden');
+                        const q = data.question_data;
+                        const optionsArea = document.getElementById('optionsArea');
+                        const inputArea = document.getElementById('inputArea');
+                        optionsArea.innerHTML = '';
+                        if (q.type === 'choice') {
+                            optionsArea.classList.remove('hidden');
+                            inputArea.classList.add('hidden');
+                            q.options.forEach(opt => {
+                                const btn = document.createElement('button');
+                                btn.className = 'btn btn-outline-light btn-lg';
+                                btn.innerText = opt;
+                                btn.onclick = () => submitChoice(opt);
+                                optionsArea.appendChild(btn);
+                            });
+                        } else {
+                            optionsArea.classList.add('hidden');
+                            inputArea.classList.remove('hidden');
+                            document.getElementById('textAnswer').disabled = false;
+                        }
+                    } else {
+                        document.getElementById('listeningMessage').classList.remove('hidden');
+                        document.getElementById('interactionContainer').classList.add('hidden');
+                    }
+                 }
+            } else if (data.state === 'answer') {
+                showScreen('resultBlock');
+                document.getElementById('pointsEarnedText').innerText = ""; 
+                document.getElementById('resultCardHeader').className = 'card bg-secondary p-3 mb-3';
+            } else {
+                showScreen('waitBlock');
+            }
+        });
+
+        function submitChoice(val) { socket.emit('submit_answer', {answer: val}); blockInput(); }
+        function submitText() { const val = document.getElementById('textAnswer').value; if(!val) return; socket.emit('submit_answer', {answer: val}); blockInput(); }
+        function blockInput() {
+            const btns = document.querySelectorAll('#optionsArea button');
+            btns.forEach(b => b.disabled = true);
+            document.getElementById('textAnswer').disabled = true;
+            document.getElementById('answerStatus').classList.remove('hidden');
+        }
+        function showScreen(id) {
+            ['loginBlock', 'waitBlock', 'questionBlock', 'resultBlock'].forEach(eid => {
+                document.getElementById(eid).classList.add('hidden');
+            });
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        // --- САЛЮТ ---
+        function startFireworks() {
+            const canvas = document.getElementById('fireworksCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            let particles = [];
+            function Particle(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.velocity = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
+                this.alpha = 1; this.friction = 0.96;
+            }
+            Particle.prototype.draw = function() {
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            Particle.prototype.update = function() {
+                this.velocity.x *= this.friction; this.velocity.y *= this.friction;
+                this.x += this.velocity.x; this.y += this.velocity.y;
+                this.alpha -= 0.01;
+            }
+            function animate() {
+                requestAnimationFrame(animate);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p, i) => {
+                    if (p.alpha > 0) { p.update(); p.draw(); } 
+                    else particles.splice(i, 1);
+                });
+            }
+            setInterval(() => {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height / 2;
+                const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
+                for (let i = 0; i < 30; i++) particles.push(new Particle(x, y, color));
+            }, 800);
+            animate();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Админ - ЧО? ЗА? ТРЕК?</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { overflow-x: hidden; }
+        .q-done { color: green; font-weight: bold; }
+        .q-current { color: blue; font-weight: bold; border: 2px solid blue; padding: 2px; border-radius: 5px; background: rgba(0,0,255,0.05); }
+        .answered-badge { width: 10px; height: 10px; background-color: green; border-radius: 50%; display: inline-block; }
+        .ans-card { transition: all 0.3s; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .ans-correct { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .ans-wrong { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+
+        #questionsList { columns: 2; column-gap: 20px; list-style-position: inside; }
+        #questionsList li { break-inside: avoid-column; page-break-inside: avoid; margin-bottom: 5px; }
+
+        @keyframes rainbow {
+            0% { color: #dc3545; } 20% { color: #fd7e14; } 40% { color: #ffc107; }
+            60% { color: #28a745; } 80% { color: #007bff; } 100% { color: #6610f2; }
+        }
+        .game-title {
+            font-weight: 900; text-transform: uppercase; text-align: center; margin-bottom: 20px;
+            animation: rainbow 5s infinite; text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+        }
+
+        #gameEndOverlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 2000;
+            color: white; overflow-y: auto; padding: 20px;
+            text-align: center;
+        }
+        canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1000; }
+        .winner-name { font-size: 4rem; font-weight: bold; color: #ffc107; text-shadow: 0 0 20px rgba(255,193,7,0.5); }
+        .podium-table { max-width: 600px; margin: 0 auto; background: rgba(255,255,255,0.1); border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-light">
+    
+    <canvas id="fireworksCanvas"></canvas>
+
+    <!-- ИНТЕРФЕЙС ФИНАЛА -->
+    <div id="gameEndOverlay">
+        <div class="container mt-5">
+            <h1 class="mb-4">🎉 ИГРА ЗАВЕРШЕНА! 🎉</h1>
+            <h3 class="text-white-50" id="winnerText">Победители:</h3>
+            <div id="finalWinnerName" class="winner-name mb-2"></div>
+            <h2 id="finalWinnerScore" class="mb-5 text-warning"></h2>
+            
+            <div class="podium-table p-3">
+                <h4 class="mb-3">🏆 Итоговая таблица 🏆</h4>
+                <table class="table table-dark table-striped">
+                    <thead><tr><th>#</th><th>Имя</th><th>Баллы</th></tr></thead>
+                    <tbody id="finalLeaderboard"></tbody>
+                </table>
+            </div>
+            
+            <!-- КНОПКА ПЕРЕЗАПУСКА (Очищает экран и начинает игру) -->
+            <button onclick="restartGameFull()" class="btn btn-success mt-5 btn-lg">Начать новую игру</button>
+            <br>
+            <button onclick="closeEndScreen()" class="btn btn-outline-secondary mt-3 btn-sm">Просто вернуться в админку</button>
+        </div>
+    </div>
+
+    <!-- ОСНОВНОЙ ИНТЕРФЕЙС -->
+    <div class="container mt-4 mb-5 main-interface">
+        <h1 class="game-title">🎧 ЧО? ЗА? ТРЕК? 🎶</h1>
+        <audio id="adminAudio" controls class="w-100 mb-3"></audio>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card p-3 mb-3">
+                    <div id="controls">
+                        <button onclick="startGame()" class="btn btn-primary mb-2" id="btnStart">Начать игру ▶️</button>
+                        <button onclick="endGame()" class="btn btn-danger mb-2" id="btnEnd" disabled>Завершить ⏹️</button>
+                        <hr>
+                        <div id="gameControls" style="display:none;">
+                            <h4>Раунд № <span id="qNum">0</span></h4>
+                            <div id="adminOptionsContainer" class="my-3 p-3 border rounded bg-white" style="display:none;">
+                                <h6 class="text-muted">Варианты ответов:</h6>
+                                <div id="adminOptionsList" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button onclick="nextQuestion()" class="btn btn-success" id="btnNext">След. вопрос ⏭️</button>
+                                <button onclick="repeatQuestion()" class="btn btn-warning" id="btnRepeat" disabled>Повторить 🔄</button>
+                                <button onclick="showAnswer()" class="btn btn-info" id="btnShow" disabled>Ответ 💡</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-3">
+                    <h5>Список треков</h5>
+                    <ul id="questionsList" class="list-group list-group-flush"></ul>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5>Топ Игроков (<span id="playerCount">0</span>)</h5>
+                    <ul id="playersList" class="list-group"></ul>
+                </div>
+            </div>
+        </div>
+        <div id="answersSection" class="mt-5 text-center" style="display: none;">
+            <hr>
+            <h3 class="mb-4">Ответы игроков:</h3>
+            <div id="answersWall" class="row justify-content-center g-3"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const audioPlayer = document.getElementById('adminAudio');
+        let currentPhase = 'idle'; 
+        let currentQuestionData = null; 
+        let endScreenDismissed = false;
+        let animationFrameId; // Для контроля анимации
+
+        socket.on('connect', () => { socket.emit('join_admin'); });
+
+        socket.on('admin_update', (data) => {
+            currentPhase = data.phase;
+            currentQuestionData = data.current_question; 
+            
+            if (data.game_active) {
+                endScreenDismissed = false;
+            }
+
+            if (data.phase === 'finished' && data.final_results && !endScreenDismissed) {
+                showEndScreen(data.final_results);
+                return;
+            }
+
+            document.querySelector('.main-interface').style.display = 'block';
+            document.getElementById('gameEndOverlay').style.display = 'none';
+            // Останавливаем салют, если он вдруг работает
+            stopFireworks();
+
+            renderPlayers(data.players);
+            renderQuestions(data.questions);
+            updateControls(data);
+            
+            if (data.phase === 'question' || data.phase === 'idle') {
+                document.getElementById('answersSection').style.display = 'none';
+                document.getElementById('answersWall').innerHTML = '';
+            }
+            if (data.phase === 'question' && audioPlayer.paused && audioPlayer.currentTime === 0) {
+                 document.getElementById('adminOptionsContainer').style.display = 'none';
+            }
+        });
+
+        socket.on('game_over', (data) => {
+            endScreenDismissed = false;
+            showEndScreen(data);
+        });
+
+        function showEndScreen(data) {
+            document.querySelector('.main-interface').style.display = 'none';
+            document.getElementById('gameEndOverlay').style.display = 'block';
+            
+            const winners = data.winners || [];
+            if (winners.length > 0) {
+                document.getElementById('winnerText').innerText = winners.length > 1 ? "Победители:" : "Победитель:";
+                // Собираем имена через запятую
+                const names = winners.map(w => w.name).join(', ');
+                document.getElementById('finalWinnerName').innerText = names;
+                document.getElementById('finalWinnerScore').innerText = winners[0].score + " баллов";
+            } else {
+                document.getElementById('winnerText').innerText = "";
+                document.getElementById('finalWinnerName').innerText = "Нет победителя";
+                document.getElementById('finalWinnerScore').innerText = "";
+            }
+
+            const tbody = document.getElementById('finalLeaderboard');
+            tbody.innerHTML = '';
+            data.leaderboard.forEach((p, index) => {
+                tbody.innerHTML += `<tr><td>${index+1}</td><td>${p.name}</td><td>${p.score}</td></tr>`;
+            });
+            
+            startFireworks();
+        }
+
+        function restartGameFull() {
+            closeEndScreen();
+            startGame(); // Отправляет admin_start_game
+        }
+
+        function closeEndScreen() {
+            endScreenDismissed = true;
+            stopFireworks(); // ОСТАНОВКА АНИМАЦИИ
+            document.getElementById('gameEndOverlay').style.display = 'none';
+            document.querySelector('.main-interface').style.display = 'block';
+        }
+
+        socket.on('play_audio', (data) => {
+            if (data.file.includes("-1.mp3")) {
+                document.getElementById('adminOptionsContainer').style.display = 'none';
+            }
+            audioPlayer.src = '/media/' + data.file;
+            audioPlayer.play();
+        });
+
+        audioPlayer.onended = function() {
+            if (currentPhase === 'question') {
+                socket.emit('admin_audio_finished');
+                if (currentQuestionData && currentQuestionData.type === 'choice') {
+                    showAdminOptions(currentQuestionData.options);
+                }
+            }
+        };
+
+        function showAdminOptions(options) {
+            const container = document.getElementById('adminOptionsContainer');
+            const list = document.getElementById('adminOptionsList');
+            list.innerHTML = '';
+            options.forEach(opt => {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-secondary p-2 fs-6';
+                badge.innerText = opt;
+                list.appendChild(badge);
+            });
+            container.style.display = 'block';
+        }
+
+        socket.on('round_results', (results) => {
+            const section = document.getElementById('answersSection');
+            const wall = document.getElementById('answersWall');
+            wall.innerHTML = '';
+            section.style.display = 'block';
+            if (results.length === 0) {
+                wall.innerHTML = '<p class="text-muted">Никто не дал ответа.</p>';
+            } else {
+                results.forEach(res => {
+                    const col = document.createElement('div');
+                    col.className = 'col-auto'; 
+                    const cardClass = res.is_correct ? 'ans-correct' : 'ans-wrong';
+                    const icon = res.is_correct ? '✅' : '❌';
+                    col.innerHTML = `<div class="card ans-card ${cardClass}" style="min-width: 160px; max-width: 250px;">
+                            <div class="card-body p-2 text-center">
+                                <h6 class="card-title fw-bold mb-1">${res.name}</h6>
+                                <p class="card-text m-0 text-break">${res.answer} ${icon}</p>
+                            </div></div>`;
+                    wall.appendChild(col);
+                });
+            }
+            setTimeout(() => { section.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+        });
+
+        function renderPlayers(players) {
+            const list = document.getElementById('playersList');
+            document.getElementById('playerCount').innerText = players.length;
+            list.innerHTML = '';
+            players.forEach(p => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                li.innerHTML = `<span>${p.name} ${p.has_answered ? '<span class="answered-badge" title="Ответил"></span>' : ''}</span>
+                    <div class="d-flex align-items-center"><span class="badge bg-primary rounded-pill me-2">${p.score}</span>
+                    <div class="btn-group btn-group-sm"><button class="btn btn-outline-danger" onclick="takePoint('${p.id}')">-</button>
+                    <button class="btn btn-outline-success" onclick="givePoint('${p.id}')">+</button></div></div>`;
+                list.appendChild(li);
+            });
+        }
+
+        function givePoint(playerId) { socket.emit('admin_give_point', {id: playerId}); }
+        function takePoint(playerId) { socket.emit('admin_take_point', {id: playerId}); }
+        function renderQuestions(questions) {
+            const list = document.getElementById('questionsList');
+            list.innerHTML = '';
+            questions.forEach((q, index) => {
+                const li = document.createElement('li');
+                let styleClass = '', icon = '⚪';
+                if (q.status === 'done') { styleClass = 'q-done'; icon = '✅'; }
+                else if (q.status === 'current') { styleClass = 'q-current'; icon = '▶️'; }
+                let pointsText = '';
+                if(q.type === 'choice') pointsText = '<small class="text-muted ms-1">(1 б.)</small>';
+                else if(q.type === 'text') pointsText = '<small class="text-muted ms-1">(2 б.)</small>';
+                li.className = `list-group-item ${styleClass}`;
+                li.innerHTML = `${icon} Трек ${index + 1} ${pointsText}`;
+                list.appendChild(li);
+            });
+        }
+        function updateControls(data) {
+            document.getElementById('btnStart').disabled = data.game_active;
+            document.getElementById('btnEnd').disabled = !data.game_active;
+            const gc = document.getElementById('gameControls');
+            if (data.game_active) {
+                gc.style.display = 'block';
+                document.getElementById('qNum').innerText = data.current_index + 1;
+                const isQ = (data.phase === 'question');
+                document.getElementById('btnNext').disabled = isQ;
+                document.getElementById('btnRepeat').disabled = !isQ;
+                document.getElementById('btnShow').disabled = !isQ;
+                if(data.phase==='finished') document.getElementById('qNum').innerText = "Конец";
+            } else {
+                gc.style.display = 'none';
+                document.getElementById('adminOptionsContainer').style.display = 'none';
+                document.getElementById('answersSection').style.display = 'none';
+            }
+        }
+        function startGame() { socket.emit('admin_start_game'); }
+        function nextQuestion() { socket.emit('admin_next_question'); }
+        function repeatQuestion() { socket.emit('admin_repeat_question'); }
+        function showAnswer() { socket.emit('admin_show_answer'); }
+        function endGame() { socket.emit('admin_end_game'); }
+
+        // --- САЛЮТ С УПРАВЛЕНИЕМ ---
+        function startFireworks() {
+            const canvas = document.getElementById('fireworksCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            let particles = [];
+
+            function Particle(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.velocity = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
+                this.alpha = 1; this.friction = 0.96;
+            }
+            Particle.prototype.draw = function() {
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            Particle.prototype.update = function() {
+                this.velocity.x *= this.friction; this.velocity.y *= this.friction;
+                this.x += this.velocity.x; this.y += this.velocity.y;
+                this.alpha -= 0.01;
+            }
+
+            function animate() {
+                animationFrameId = requestAnimationFrame(animate); // Сохраняем ID
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p, i) => {
+                    if (p.alpha > 0) { p.update(); p.draw(); } 
+                    else particles.splice(i, 1);
+                });
+            }
+            
+            // Запуск генерации частиц
+            const interval = setInterval(() => {
+                // Если анимация остановлена, не генерируем новые
+                if (!document.getElementById('gameEndOverlay').style.display === 'none') {
+                    clearInterval(interval);
+                    return;
+                }
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height / 2;
+                const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
+                for (let i = 0; i < 30; i++) particles.push(new Particle(x, y, color));
+            }, 800);
+            
+            animate();
+        }
+
+        // Функция принудительной остановки
+        function stopFireworks() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            const canvas = document.getElementById('fireworksCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  music-game:
+    build: .
+    container_name: music_guess_game
+    ports:
+      - "5000:5000"
+    volumes:
+      # Пробрасываем папку с музыкой внутрь контейнера
+      - ./media:/app/media
+      # Пробрасываем файл вопросов, чтобы можно было его править без ребилда
+      - ./questions.json:/app/questions.json
+    restart: unless-stopped
