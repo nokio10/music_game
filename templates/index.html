@@ -30,11 +30,27 @@
         }
         canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1500; }
         .winner-msg { font-size: 2rem; color: #ffc107; font-weight: bold; margin-bottom: 10px; }
+
+        /* --- Таймер --- */
+        #timerOverlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 2500;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        .timer-count { font-size: 8rem; color: #ffc107; font-weight: 900; }
+        .timer-text { color: white; font-size: 1.5rem; text-transform: uppercase;}
     </style>
 </head>
 <body class="bg-dark text-white">
     <canvas id="fireworksCanvas"></canvas>
     <div class="sticky-header">🎧 ЧО? ЗА? ТРЕК? 🎶</div>
+
+    <!-- ТАЙМЕР -->
+    <div id="timerOverlay">
+        <div class="timer-text">Вскрываем карты через...</div>
+        <div class="timer-count" id="timerValue">3</div>
+    </div>
 
     <!-- ФИНАЛЬНЫЙ ЭКРАН -->
     <div id="gameEndOverlay">
@@ -70,7 +86,11 @@
         </div>
 
         <div id="questionBlock" class="card bg-secondary p-3 hidden">
-            <h5 class="text-center mb-3">Как заканчивается строка из трека №<span id="qIndex"></span>? <br><small class="text-warning">(цена: <span id="qPoints"></span> балл.)</small></h5>
+            <h5 class="text-center mb-3">Вопрос №<span id="qIndex"></span> <small class="text-warning">(цена: <span id="qPoints"></span> балл.)</small></h5>
+            
+            <!-- ОТОБРАЖЕНИЕ ВОПРОСА -->
+            <h4 class="text-center mb-4 text-white" id="questionTextDisplay" style="min-height: 50px;"></h4>
+
             <div id="listeningMessage" class="text-center py-4">
                 <div class="pulse-text">🎧 Слушайте трек...</div>
                 <small class="text-white-50">Ввод ответа появится после окончания музыки</small>
@@ -120,6 +140,7 @@
         socket.on('game_reset', () => {
              document.getElementById('gameEndOverlay').style.display = 'none';
              document.querySelector('.main-game-interface').style.display = 'block';
+             document.getElementById('timerOverlay').style.display = 'none'; // Скрыть таймер
              localStorage.removeItem('music_game_name'); 
              myName = '';
              document.getElementById('usernameInput').value = '';
@@ -133,14 +154,13 @@
         function showEndScreen(data) {
             document.querySelector('.main-game-interface').style.display = 'none';
             document.getElementById('gameEndOverlay').style.display = 'block';
+            document.getElementById('timerOverlay').style.display = 'none';
             
             const txtBlock = document.getElementById('winnerTextBlock');
             const winners = data.winners || [];
             
             if (winners.length > 0) {
-                // Проверяем, есть ли я в списке победителей
                 const amIWinner = winners.some(w => w.name === myName);
-                
                 if (amIWinner) {
                     txtBlock.innerHTML = `<div class="winner-msg">🏆 ВЫ ПОБЕДИЛИ! 🏆</div><h3>Ваш счет: ${winners[0].score}</h3>`;
                     startFireworks();
@@ -162,8 +182,12 @@
 
         socket.on('new_question', (data) => {
             showScreen('questionBlock');
+            document.getElementById('timerOverlay').style.display = 'none';
             document.getElementById('qIndex').innerText = data.index;
             document.getElementById('qPoints').innerText = data.points; 
+            // Вставляем текст вопроса
+            document.getElementById('questionTextDisplay').innerText = data.question || "Вопрос на экране";
+
             document.getElementById('answerStatus').classList.add('hidden');
             document.getElementById('resultBlock').classList.add('hidden');
             document.getElementById('listeningMessage').classList.remove('hidden');
@@ -194,7 +218,26 @@
             document.getElementById('interactionContainer').classList.remove('hidden');
         });
 
+        // --- ЛОГИКА ТАЙМЕРА ---
+        socket.on('start_timer', (data) => {
+            const overlay = document.getElementById('timerOverlay');
+            const valSpan = document.getElementById('timerValue');
+            let timeLeft = data.seconds;
+            
+            overlay.style.display = 'flex';
+            valSpan.innerText = timeLeft;
+            
+            const timerId = setInterval(() => {
+                timeLeft--;
+                valSpan.innerText = timeLeft;
+                if(timeLeft <= 0) {
+                    clearInterval(timerId);
+                }
+            }, 1000);
+        });
+
         socket.on('show_answer_client', (data) => {
+            document.getElementById('timerOverlay').style.display = 'none'; // Убрать таймер, если он есть
             document.getElementById('questionBlock').classList.add('hidden');
             document.getElementById('resultBlock').classList.remove('hidden');
             document.getElementById('correctAnswerText').innerText = data.answer;
@@ -221,6 +264,7 @@
         });
 
         socket.on('game_status', (data) => {
+            document.getElementById('timerOverlay').style.display = 'none';
             if(data.state === 'finished' && data.final_results) {
                 showEndScreen(data.final_results);
                 return;
@@ -230,6 +274,9 @@
                  if(data.question_data) {
                     document.getElementById('qIndex').innerText = data.question_data.index;
                     document.getElementById('qPoints').innerText = data.question_data.points;
+                    // Текст вопроса
+                    document.getElementById('questionTextDisplay').innerText = data.question_data.question || "Вопрос на экране";
+
                     if (data.inputs_enabled) {
                         document.getElementById('listeningMessage').classList.add('hidden');
                         document.getElementById('interactionContainer').classList.remove('hidden');

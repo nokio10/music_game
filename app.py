@@ -27,6 +27,7 @@ class GameState:
         self.current_phase = 'idle' 
         self.inputs_enabled = False
         self.final_results = None
+        self.auto_answer_task = None # Для хранения задачи таймера
 
 game = GameState()
 
@@ -106,6 +107,27 @@ def on_answer(data):
     if player:
         player['last_answer'] = answer
         _broadcast_admin_info()
+        
+        # --- ПРОВЕРКА: Все ли ответили? ---
+        total_players = len(game.players)
+        answered_count = sum(1 for p in game.players.values() if p['last_answer'] is not None)
+        
+        if total_players > 0 and answered_count == total_players:
+            # Блокируем ввод, чтобы не спамили
+            game.inputs_enabled = False
+            # Запускаем таймер на клиентах
+            socketio.emit('start_timer', {'seconds': 3}, to='players')
+            # Запускаем фоновую задачу на сервере
+            socketio.start_background_task(_auto_show_answer_task)
+
+def _auto_show_answer_task():
+    """Фоновая задача: ждет 3 секунды и раскрывает ответ."""
+    socketio.sleep(3)
+    # Проверяем, что фаза всё ещё 'question' (админ мог нажать "завершить" или "ответ" сам)
+    if game.is_active and game.current_phase == 'question':
+        # Используем контекст приложения, если нужно (для Flask-SocketIO обычно не обязательно, но безопасно)
+        with app.app_context():
+            _reveal_answer_logic()
 
 # --- ADMIN ACTIONS ---
 @socketio.on('admin_start_game')
@@ -143,6 +165,7 @@ def admin_next():
         payload = {
             'type': q_data['type'],
             'options': q_data['options'],
+            'question': q_data.get('question', ''), # <-- ДОБАВЛЕНО ПОЛЕ ВОПРОСА
             'index': game.current_q_index + 1,
             'inputs_enabled': False,
             'points': points
@@ -165,8 +188,16 @@ def admin_repeat():
 
 @socketio.on('admin_show_answer')
 def admin_show_answer():
+    # Вызываем общую логику (ручное нажатие)
+    _reveal_answer_logic()
+
+def _reveal_answer_logic():
+    """Логика подсчета очков и переключения фазы."""
     if game.current_phase != 'question': return
+    
     game.current_phase = 'answer'
+    game.inputs_enabled = False # На всякий случай блокируем
+    
     q_data = game.questions[game.current_q_index]
     correct_raw = q_data['answer']
     correct_norm = normalize_text(correct_raw)
@@ -207,8 +238,9 @@ def admin_show_answer():
         'leaderboard': leaderboard
     }, to='players')
     
-    emit('play_audio', {'file': f"{q_data['id']}-2.mp3"}, to=request.sid)
-    emit('round_results', round_results_admin, to=request.sid)
+    # Отправляем админу (через broadcast или напрямую, если вызвано из потока, request.sid может не быть)
+    socketio.emit('play_audio', {'file': f"{q_data['id']}-2.mp3"}, to='admin_room')
+    socketio.emit('round_results', round_results_admin, to='admin_room')
     _broadcast_admin_info()
 
 @socketio.on('admin_end_game')
@@ -221,16 +253,14 @@ def admin_end():
         leaderboard.append({'name': p['name'], 'score': p['score']})
     leaderboard.sort(key=lambda x: x['score'], reverse=True)
     
-    # --- НОВАЯ ЛОГИКА ПОБЕДИТЕЛЕЙ ---
     winners = []
     if leaderboard:
         max_score = leaderboard[0]['score']
-        # Находим всех, у кого балл равен максимальному
         winners = [p for p in leaderboard if p['score'] == max_score]
     
     game.final_results = {
         'leaderboard': leaderboard,
-        'winners': winners # Теперь это список!
+        'winners': winners
     }
     
     socketio.emit('game_over', game.final_results)
@@ -266,6 +296,7 @@ def _get_client_state():
         'question_data': {
             'type': q_data['type'],
             'options': q_data['options'],
+            'question': q_data.get('question', ''), # <-- ДОБАВЛЕНО ПОЛЕ
             'index': game.current_q_index + 1,
             'points': points
         }

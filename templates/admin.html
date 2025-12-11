@@ -14,8 +14,23 @@
         .ans-correct { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
         .ans-wrong { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
 
-        #questionsList { columns: 2; column-gap: 20px; list-style-position: inside; }
-        #questionsList li { break-inside: avoid-column; page-break-inside: avoid; margin-bottom: 5px; }
+        /* --- ИЗМЕНЕННЫЙ БЛОК ДЛЯ СПИСКА ТРЕКОВ --- */
+        #questionsList { 
+            list-style: none;
+            padding: 0;
+            display: grid;
+            /* Ровно 10 строк */
+            grid-template-rows: repeat(8, auto); 
+            /* Заполнять колонками */
+            grid-auto-flow: column; 
+            /* Расстояние между колонками и строками */
+            column-gap: 20px;
+            row-gap: 5px;
+        }
+        /* Чтобы карточка растягивалась под контент, если колонок много */
+        .track-list-container {
+            overflow-x: auto; 
+        }
 
         @keyframes rainbow {
             0% { color: #dc3545; } 20% { color: #fd7e14; } 40% { color: #ffc107; }
@@ -61,7 +76,7 @@
             <!-- КНОПКА ПЕРЕЗАПУСКА (Очищает экран и начинает игру) -->
             <button onclick="restartGameFull()" class="btn btn-success mt-5 btn-lg">Начать новую игру</button>
             <br>
-            <button onclick="closeEndScreen()" class="btn btn-outline-secondary mt-3 btn-sm">Просто вернуться в админку</button>
+            <button onclick="closeEndScreen()" class="btn btn-outline-secondary mt-3 btn-sm">Просто посмотреть салют</button>
         </div>
     </div>
 
@@ -91,7 +106,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="card p-3">
+                <div class="card p-3 track-list-container">
                     <h5>Список треков</h5>
                     <ul id="questionsList" class="list-group list-group-flush"></ul>
                 </div>
@@ -135,7 +150,6 @@
 
             document.querySelector('.main-interface').style.display = 'block';
             document.getElementById('gameEndOverlay').style.display = 'none';
-            // Останавливаем салют, если он вдруг работает
             stopFireworks();
 
             renderPlayers(data.players);
@@ -163,7 +177,6 @@
             const winners = data.winners || [];
             if (winners.length > 0) {
                 document.getElementById('winnerText').innerText = winners.length > 1 ? "Победители:" : "Победитель:";
-                // Собираем имена через запятую
                 const names = winners.map(w => w.name).join(', ');
                 document.getElementById('finalWinnerName').innerText = names;
                 document.getElementById('finalWinnerScore').innerText = winners[0].score + " баллов";
@@ -184,12 +197,12 @@
 
         function restartGameFull() {
             closeEndScreen();
-            startGame(); // Отправляет admin_start_game
+            startGame(); 
         }
 
         function closeEndScreen() {
             endScreenDismissed = true;
-            stopFireworks(); // ОСТАНОВКА АНИМАЦИИ
+            stopFireworks(); 
             document.getElementById('gameEndOverlay').style.display = 'none';
             document.querySelector('.main-interface').style.display = 'block';
         }
@@ -332,7 +345,7 @@
             }
 
             function animate() {
-                animationFrameId = requestAnimationFrame(animate); // Сохраняем ID
+                animationFrameId = requestAnimationFrame(animate); 
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 particles.forEach((p, i) => {
@@ -341,9 +354,7 @@
                 });
             }
             
-            // Запуск генерации частиц
             const interval = setInterval(() => {
-                // Если анимация остановлена, не генерируем новые
                 if (!document.getElementById('gameEndOverlay').style.display === 'none') {
                     clearInterval(interval);
                     return;
@@ -357,7 +368,6 @@
             animate();
         }
 
-        // Функция принудительной остановки
         function stopFireworks() {
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
