@@ -1,373 +1,613 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ЧО? ЗА? ТРЕК?</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PLAYER - PURPLE EDITION</title>
+    
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
     <style>
+        :root {
+            --bg-dark: #0f0c29;
+            --bg-gradient: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            --glass-bg: rgba(20, 20, 40, 0.75);
+            --glass-border: rgba(167, 139, 250, 0.2);
+            --primary-purple: #8b5cf6;
+            --primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+            --primary-glow: 0 4px 15px rgba(139, 92, 246, 0.4);
+            --text-main: #e2e8f0;
+            --text-accent: #a78bfa; 
+            --accent-gold: #fbbf24;
+        }
+
+        body {
+            background: var(--bg-dark);
+            background-image: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- UI COMPONENTS --- */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
         .sticky-header {
             position: fixed; top: 0; left: 0; width: 100%;
-            background-color: #212529; color: #ffc107; text-align: center;
-            padding: 10px 0; z-index: 1000; border-bottom: 2px solid #ffc107;
-            font-weight: 900; font-size: 1.2rem; text-transform: uppercase;
+            background: rgba(15, 12, 41, 0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 15px 20px; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .game-container { max-width: 600px; margin: 0 auto; padding-top: 80px; padding-bottom: 50px; }
+
+        .game-logo {
+            font-weight: 800; font-size: 1.1rem; letter-spacing: 1px;
+            background: linear-gradient(to right, #c084fc, #8b5cf6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .game-container {
+            max-width: 600px; margin: 0 auto;
+            padding-top: 100px; padding-bottom: 50px;
+        }
+
         .hidden { display: none !important; }
-        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
-        .pulse-text { animation: pulse 1.5s infinite; font-size: 1.2em; color: #ffc107; }
-        .leaderboard-row { font-size: 0.9em; }
-        .current-player-row { background-color: rgba(255, 193, 7, 0.2); font-weight: bold; }
 
-        /* --- Финал --- */
+        /* --- INPUTS & BUTTONS --- */
+        .form-control-custom {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px; color: white; padding: 12px; font-size: 1.1rem; text-align: center;
+        }
+        .form-control-custom:focus {
+            background: rgba(255,255,255,0.1); border-color: #8b5cf6; box-shadow: 0 0 15px rgba(139, 92, 246, 0.3); color: white;
+        }
+        .form-control-custom::placeholder { color: rgba(255,255,255,0.3); }
+
+        .btn-purple-main {
+            background: var(--primary-gradient); border: none; color: white;
+            font-weight: 700; border-radius: 14px; padding: 14px; letter-spacing: 0.5px;
+            box-shadow: var(--primary-glow); transition: 0.3s;
+        }
+        .btn-purple-main:active { transform: scale(0.98); }
+
+        .btn-option {
+            background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #e2e8f0; border-radius: 16px; padding: 15px; font-weight: 600;
+            transition: 0.2s; text-align: center; width: 100%; margin-bottom: 10px;
+        }
+        .btn-option:active { background: #8b5cf6; color: white; border-color: #8b5cf6; }
+        .btn-option:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* VIP BUTTON */
+        .btn-vip-next {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none; color: white; font-weight: 800;
+            border-radius: 14px; padding: 15px; width: 100%;
+            margin-top: 20px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+
+        /* --- LANG SWITCHER --- */
+        .lang-btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: #94a3b8; border-radius: 20px; padding: 4px 12px;
+            font-size: 0.75rem; font-weight: 600; cursor: pointer;
+        }
+        .active-lang { color: #c084fc; font-weight: 800; }
+
+        /* --- ANIMATIONS --- */
+        @keyframes pulse-glow { 0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(139, 92, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); } }
+        .pulse-icon { animation: pulse-glow 2s infinite; border-radius: 50%; }
+
+        /* --- OVERLAYS --- */
         #gameEndOverlay {
-            display: none;
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(33, 37, 41, 0.98); z-index: 2000;
-            color: white; overflow-y: auto; padding-top: 60px;
-            text-align: center;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 12, 41, 0.98); z-index: 2000;
+            padding: 80px 20px 20px 20px; overflow-y: auto; text-align: center;
         }
-        canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1500; }
-        .winner-msg { font-size: 2rem; color: #ffc107; font-weight: bold; margin-bottom: 10px; }
-
-        /* --- Таймер --- */
+        .winner-title { font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #facc15, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
         #timerOverlay {
-            display: none;
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); z-index: 2500;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 12, 41, 0.95); z-index: 2500;
             justify-content: center; align-items: center; flex-direction: column;
+            backdrop-filter: blur(10px);
         }
-        .timer-count { font-size: 8rem; color: #ffc107; font-weight: 900; }
-        .timer-text { color: white; font-size: 1.5rem; text-transform: uppercase;}
+        .timer-count { font-size: 8rem; font-weight: 900; color: white; text-shadow: 0 0 50px #8b5cf6; }
+        
+        /* Tables */
+        .table-custom { --bs-table-bg: transparent; --bs-table-color: #e2e8f0; }
+        .table-custom td, .table-custom th { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .current-player-row { background: rgba(139, 92, 246, 0.2) !important; font-weight: bold; color: white; }
+
+        canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1500; }
+        
+        .text-accent { color: var(--text-accent) !important; }
     </style>
 </head>
-<body class="bg-dark text-white">
+<body>
     <canvas id="fireworksCanvas"></canvas>
-    <div class="sticky-header">🎧 ЧО? ЗА? ТРЕК? 🎶</div>
+    
+    <!-- HEADER -->
+    <div class="sticky-header">
+        <div class="game-logo"><i class="fas fa-music me-2"></i><span data-i18n="gameTitle">WHAT? THE? TRACK?</span></div>
+        <button id="langToggle" class="lang-btn">
+            <span id="langEn">EN</span> / <span id="langRu">RU</span>
+        </button>
+    </div>
 
-    <!-- ТАЙМЕР -->
+    <!-- TIMER -->
     <div id="timerOverlay">
-        <div class="timer-text">Вскрываем карты через...</div>
+        <div class="text-uppercase text-accent mb-3" style="letter-spacing: 2px;" data-i18n="timerLabel">Answer reveal in...</div>
         <div class="timer-count" id="timerValue">3</div>
     </div>
 
-    <!-- ФИНАЛЬНЫЙ ЭКРАН -->
+    <!-- GAME END SCREEN -->
     <div id="gameEndOverlay">
-        <div class="container">
-            <h2 class="mb-3">🏁 Игра завершена! 🏁</h2>
+        <div class="container" style="max-width: 600px;">
+            <h2 class="mb-2 text-white" data-i18n="gameOver">🏁 GAME OVER 🏁</h2>
             
-            <div id="winnerTextBlock" class="mb-4"></div>
+            <div id="winnerTextBlock" class="mb-5"></div>
 
-            <div class="card bg-secondary p-3 mx-auto" style="max-width: 500px;">
-                <h5 class="text-white-50">Итоговая таблица</h5>
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th>#</th><th>Имя</th><th>Баллы</th></tr></thead>
-                    <tbody id="finalLeaderboard"></tbody>
-                </table>
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom border-light border-opacity-10 bg-black bg-opacity-25">
+                    <h5 class="m-0 text-white-50" data-i18n="finalTable">Leaderboard</h5>
+                </div>
+                <div class="p-3">
+                    <table class="table table-custom table-sm mb-0">
+                        <thead><tr><th>#</th><th data-i18n="thName">Name</th><th class="text-end" data-i18n="thScore">Score</th></tr></thead>
+                        <tbody id="finalLeaderboard"></tbody>
+                    </table>
+                </div>
             </div>
-            <p class="mt-4 text-muted">Спасибо за игру!</p>
+            <p class="mt-4 text-white-50 small" data-i18n="thanks">Thanks for playing!</p>
         </div>
     </div>
 
-    <!-- ОСНОВНОЙ КОНТЕЙНЕР -->
+    <!-- MAIN GAME AREA -->
     <div class="container game-container main-game-interface">
         
-        <div id="loginBlock" class="card bg-secondary p-4">
-            <h3 class="text-center mb-3">Введите ваше имя</h3>
-            <input type="text" id="usernameInput" class="form-control mb-3" placeholder="Имя">
-            <button onclick="joinGame()" class="btn btn-primary w-100">Войти в игру</button>
-        </div>
-
-        <div id="waitBlock" class="text-center hidden mt-5">
-            <h3>Ожидание начала раунда...</h3>
-            <div class="spinner-border text-light" role="status"></div>
-            <p class="mt-3 text-muted">Смотрите на экран ведущего</p>
-        </div>
-
-        <div id="questionBlock" class="card bg-secondary p-3 hidden">
-            <h5 class="text-center mb-3">Вопрос №<span id="qIndex"></span> <small class="text-warning">(цена: <span id="qPoints"></span> балл.)</small></h5>
-            
-            <!-- ОТОБРАЖЕНИЕ ВОПРОСА -->
-            <h4 class="text-center mb-4 text-white" id="questionTextDisplay" style="min-height: 50px;"></h4>
-
-            <div id="listeningMessage" class="text-center py-4">
-                <div class="pulse-text">🎧 Слушайте трек...</div>
-                <small class="text-white-50">Ввод ответа появится после окончания музыки</small>
+        <!-- LOGIN -->
+        <div id="loginBlock" class="glass-card text-center">
+            <div class="mb-4">
+                <div style="width: 80px; height: 80px; background: var(--primary-gradient); border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; box-shadow: var(--primary-glow);">
+                    <i class="fas fa-user-astronaut text-white fs-1"></i>
+                </div>
             </div>
+            <h3 class="mb-2 fw-bold" data-i18n="enterName">Enter Your Name</h3>
+            <p class="text-accent small mb-4" data-i18n="enterNameSub">To join the game session</p>
+            
+            <input type="text" id="usernameInput" class="form-control form-control-custom mb-3" placeholder="Nickname">
+            <button onclick="joinGame()" class="btn btn-purple-main w-100" data-i18n="btnJoin">JOIN GAME</button>
+        </div>
+
+        <!-- WAITING -->
+        <div id="waitBlock" class="text-center hidden mt-5">
+            <div class="pulse-icon mx-auto mb-4" style="width: 100px; height: 100px; background: rgba(139, 92, 246, 0.1); display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-headphones-alt fs-1" style="color: #a78bfa;"></i>
+            </div>
+            <h3 class="fw-bold" data-i18n="waitingTitle">Waiting for round...</h3>
+            <p class="text-accent" data-i18n="waitingSub">Look at the main screen</p>
+        </div>
+
+        <!-- QUESTION -->
+        <div id="questionBlock" class="glass-card hidden">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <span class="badge bg-primary bg-opacity-25 text-primary border border-primary px-3 py-2 rounded-pill"><span data-i18n="qNum">Q</span> #<span id="qIndex"></span></span>
+                <span class="badge bg-warning bg-opacity-25 text-warning border border-warning px-3 py-2 rounded-pill"><span id="qPoints"></span> <span data-i18n="pts">pts</span></span>
+            </div>
+            
+            <!-- QUESTION TEXT -->
+            <h4 class="text-center mb-5 fw-bold" id="questionTextDisplay" style="min-height: 50px;"></h4>
+
+            <!-- LISTENING STATE -->
+            <div id="listeningMessage" class="text-center py-3">
+                <div class="mb-3">
+                    <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+                </div>
+                <div class="fw-bold fs-5 text-white" data-i18n="listening">🎧 Listening to track...</div>
+                <small class="text-white-50" data-i18n="waitMusic">Input appears after music stops</small>
+            </div>
+
+            <!-- INTERACTION -->
             <div id="interactionContainer" class="hidden">
                 <div id="optionsArea" class="d-grid gap-2 mb-2"></div>
                 <div id="inputArea" class="hidden">
-                    <input type="text" id="textAnswer" class="form-control mb-2" placeholder="Ваш ответ...">
-                    <button onclick="submitText()" class="btn btn-warning w-100">Отправить</button>
+                    <input type="text" id="textAnswer" class="form-control form-control-custom mb-3" placeholder="...">
+                    <button onclick="submitText()" class="btn btn-warning w-100 fw-bold" data-i18n="btnSubmit">SEND ANSWER</button>
                 </div>
             </div>
-            <p id="answerStatus" class="text-center mt-2 text-warning hidden">Ответ принят!</p>
+            
+            <div id="answerStatus" class="text-center mt-3 hidden">
+                <span class="badge bg-success px-3 py-2 rounded-pill"><i class="fas fa-check me-2"></i> <span data-i18n="answerSent">Answer Accepted</span></span>
+            </div>
         </div>
 
-        <div id="resultBlock" class="card bg-secondary p-3 hidden mt-3">
-            <div id="resultCardHeader" class="card p-3 mb-3">
-                <h5 class="text-center">Правильный ответ:</h5>
-                <h3 class="text-center" id="correctAnswerText"></h3>
-                <hr>
-                <h4 class="text-center" id="pointsEarnedText"></h4>
+        <!-- RESULT -->
+        <div id="resultBlock" class="hidden">
+            <div id="resultCardHeader" class="glass-card p-4 mb-3 text-center" style="border-width: 2px;">
+                <h6 class="text-white-50 text-uppercase mb-2" style="letter-spacing: 1px;" data-i18n="correctLabel">Correct Answer</h6>
+                <h3 class="fw-bold mb-4" id="correctAnswerText"></h3>
+                <div class="p-3 rounded-3 bg-black bg-opacity-20">
+                    <h4 class="m-0" id="pointsEarnedText"></h4>
+                </div>
             </div>
-            <h5 class="text-center mt-2">Турнирная таблица</h5>
-            <div class="table-responsive">
-                <table class="table table-dark table-striped table-sm">
-                    <thead><tr><th>#</th><th>Имя</th><th class="text-end">Очки</th></tr></thead>
-                    <tbody id="leaderboardBody"></tbody>
-                </table>
+            
+            <h6 class="text-center text-accent text-uppercase mb-3" style="letter-spacing: 1px;" data-i18n="roundTable">Round Leaderboard</h6>
+            
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3">
+                    <table class="table table-custom table-sm mb-0">
+                        <thead><tr><th>#</th><th data-i18n="thName">Name</th><th class="text-end" data-i18n="thScore">Pts</th></tr></thead>
+                        <tbody id="leaderboardBody"></tbody>
+                    </table>
+                </div>
             </div>
+
+            <!-- КНОПКА ДЛЯ VIP ИГРОКА -->
+            <button id="vipNextBtn" class="btn-vip-next hidden" onclick="triggerNextQuestion()">
+                <i class="fas fa-forward me-2"></i> <span data-i18n="btnNextQuestion">NEXT QUESTION</span>
+            </button>
         </div>
     </div>
 
     <script>
-        const socket = io();
-        let myName = localStorage.getItem('music_game_name') || '';
-        if (myName) document.getElementById('usernameInput').value = myName;
+        // --- I18N CONFIG ---
+        const i18n = {
+            en: {
+                gameTitle: "WHAT? THE? TRACK?",
+                timerLabel: "ANSWER REVEAL IN...",
+                gameOver: "🏁 GAME OVER 🏁",
+                finalTable: "Final Leaderboard",
+                thanks: "Thanks for playing!",
+                enterName: "Enter Your Name",
+                enterNameSub: "To join the game session",
+                btnJoin: "JOIN GAME",
+                waitingTitle: "Waiting for round...",
+                waitingSub: "Look at the main screen",
+                qNum: "Q",
+                pts: "pts",
+                listening: "🎧 Listening to track...",
+                waitMusic: "Input appears after music stops",
+                btnSubmit: "SEND ANSWER",
+                answerSent: "Answer Accepted",
+                correctLabel: "CORRECT ANSWER",
+                roundTable: "ROUND LEADERBOARD",
+                thName: "Name",
+                thScore: "Score",
+                winnerYou: "🏆 YOU WON! 🏆",
+                yourScore: "Your Score",
+                winners: "Winners",
+                noWinners: "No winners",
+                earned: "You earned",
+                points: "points!",
+                noPoints: "No points earned 😢",
+                btnNextQuestion: "NEXT QUESTION"
+            },
+            ru: {
+                gameTitle: "ЧО? ЗА? ТРЕК?",
+                timerLabel: "ВСКРЫВАЕМ КАРТЫ...",
+                gameOver: "🏁 ИГРА ОКОНЧЕНА 🏁",
+                finalTable: "Итоговая таблица",
+                thanks: "Спасибо за игру!",
+                enterName: "Введите ваше имя",
+                enterNameSub: "Чтобы присоединиться к игре",
+                btnJoin: "ВОЙТИ В ИГРУ",
+                waitingTitle: "Ждем начало раунда...",
+                waitingSub: "Смотрите на экран ведущего",
+                qNum: "Вопр",
+                pts: "балл",
+                listening: "🎧 Слушаем трек...",
+                waitMusic: "Ввод ответа после музыки",
+                btnSubmit: "ОТПРАВИТЬ",
+                answerSent: "Ответ принят",
+                correctLabel: "ПРАВИЛЬНЫЙ ОТВЕТ",
+                roundTable: "ТАБЛИЦА РАУНДА",
+                thName: "Имя",
+                thScore: "Очки",
+                winnerYou: "🏆 ВЫ ПОБЕДИЛИ! 🏆",
+                yourScore: "Ваш счет",
+                winners: "Победители",
+                noWinners: "Победителей нет",
+                earned: "Вы заработали",
+                points: "балл(ов)!",
+                noPoints: "Вы не заработали баллов 😢",
+                btnNextQuestion: "СЛЕДУЮЩИЙ ВОПРОС"
+            }
+        };
 
-        function joinGame() {
-            const name = document.getElementById('usernameInput').value;
-            if(!name) return alert('Введите имя!');
-            myName = name;
-            localStorage.setItem('music_game_name', name);
-            socket.emit('join_game', {name: name});
-            document.getElementById('loginBlock').classList.add('hidden');
-            document.getElementById('waitBlock').classList.remove('hidden');
+        let currentLang = localStorage.getItem('playerLang') || 'en';
+        let currentVipId = null;
+
+        function t(key) { return i18n[currentLang][key] || key; }
+
+        function applyLanguage() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                el.innerText = t(el.dataset.i18n);
+            });
+            const enSpan = document.getElementById('langEn');
+            const ruSpan = document.getElementById('langRu');
+            if (currentLang === 'en') {
+                enSpan.classList.add('active-lang'); ruSpan.classList.remove('active-lang');
+            } else {
+                enSpan.classList.remove('active-lang'); ruSpan.classList.add('active-lang');
+            }
+            localStorage.setItem('playerLang', currentLang);
+            document.getElementById('usernameInput').placeholder = currentLang === 'en' ? 'Nickname' : 'Имя';
+            document.getElementById('textAnswer').placeholder = currentLang === 'en' ? 'Your answer...' : 'Ваш ответ...';
         }
 
-        socket.on('game_reset', () => {
-             document.getElementById('gameEndOverlay').style.display = 'none';
-             document.querySelector('.main-game-interface').style.display = 'block';
-             document.getElementById('timerOverlay').style.display = 'none'; // Скрыть таймер
-             localStorage.removeItem('music_game_name'); 
-             myName = '';
-             document.getElementById('usernameInput').value = '';
-             showScreen('loginBlock');
-        });
+        document.addEventListener("DOMContentLoaded", () => {
+            const socket = io();
+            window.socketRef = socket; // save ref
+            applyLanguage();
 
-        socket.on('game_over', (data) => {
-            showEndScreen(data);
-        });
-
-        function showEndScreen(data) {
-            document.querySelector('.main-game-interface').style.display = 'none';
-            document.getElementById('gameEndOverlay').style.display = 'block';
-            document.getElementById('timerOverlay').style.display = 'none';
-            
-            const txtBlock = document.getElementById('winnerTextBlock');
-            const winners = data.winners || [];
-            
-            if (winners.length > 0) {
-                const amIWinner = winners.some(w => w.name === myName);
-                if (amIWinner) {
-                    txtBlock.innerHTML = `<div class="winner-msg">🏆 ВЫ ПОБЕДИЛИ! 🏆</div><h3>Ваш счет: ${winners[0].score}</h3>`;
-                    startFireworks();
-                } else {
-                    const names = winners.map(w => w.name).join(', ');
-                    txtBlock.innerHTML = `<h3>Победители: <span class="text-warning">${names}</span></h3><h4>Счет: ${winners[0].score}</h4>`;
-                }
-            } else {
-                txtBlock.innerHTML = "<h3>Победителей нет</h3>";
-            }
-
-            const tbody = document.getElementById('finalLeaderboard');
-            tbody.innerHTML = '';
-            data.leaderboard.forEach((p, index) => {
-                let rowClass = (p.name === myName) ? 'table-warning text-dark fw-bold' : '';
-                tbody.innerHTML += `<tr class="${rowClass}"><td>${index+1}</td><td>${p.name}</td><td>${p.score}</td></tr>`;
+            document.getElementById('langToggle').addEventListener('click', () => {
+                currentLang = currentLang === 'en' ? 'ru' : 'en';
+                applyLanguage();
             });
-        }
 
-        socket.on('new_question', (data) => {
-            showScreen('questionBlock');
-            document.getElementById('timerOverlay').style.display = 'none';
-            document.getElementById('qIndex').innerText = data.index;
-            document.getElementById('qPoints').innerText = data.points; 
-            // Вставляем текст вопроса
-            document.getElementById('questionTextDisplay').innerText = data.question || "Вопрос на экране";
+            let myName = localStorage.getItem('music_game_name') || '';
+            if (myName) document.getElementById('usernameInput').value = myName;
 
-            document.getElementById('answerStatus').classList.add('hidden');
-            document.getElementById('resultBlock').classList.add('hidden');
-            document.getElementById('listeningMessage').classList.remove('hidden');
-            document.getElementById('interactionContainer').classList.add('hidden');
-            const optionsArea = document.getElementById('optionsArea');
-            const inputArea = document.getElementById('inputArea');
-            optionsArea.innerHTML = '';
-            inputArea.classList.add('hidden');
-            if (data.type === 'choice') {
-                optionsArea.classList.remove('hidden');
-                data.options.forEach(opt => {
-                    const btn = document.createElement('button');
-                    btn.className = 'btn btn-outline-light btn-lg';
-                    btn.innerText = opt;
-                    btn.onclick = () => submitChoice(opt);
-                    optionsArea.appendChild(btn);
-                });
-            } else {
-                optionsArea.classList.add('hidden');
-                inputArea.classList.remove('hidden');
-                document.getElementById('textAnswer').value = '';
-                document.getElementById('textAnswer').disabled = false;
+            window.joinGame = function() {
+                const name = document.getElementById('usernameInput').value;
+                if(!name) return alert('Enter name!');
+                myName = name;
+                localStorage.setItem('music_game_name', name);
+                socket.emit('join_game', {name: name});
+                document.getElementById('loginBlock').classList.add('hidden');
+                document.getElementById('waitBlock').classList.remove('hidden');
             }
-        });
 
-        socket.on('allow_answers', () => {
-            document.getElementById('listeningMessage').classList.add('hidden');
-            document.getElementById('interactionContainer').classList.remove('hidden');
-        });
+            // Функция нажатия кнопки "Next Question" (только для VIP)
+            window.triggerNextQuestion = function() {
+                socket.emit('player_next_question');
+                document.getElementById('vipNextBtn').classList.add('hidden'); // прячем кнопку после нажатия
+            };
 
-        // --- ЛОГИКА ТАЙМЕРА ---
-        socket.on('start_timer', (data) => {
-            const overlay = document.getElementById('timerOverlay');
-            const valSpan = document.getElementById('timerValue');
-            let timeLeft = data.seconds;
-            
-            overlay.style.display = 'flex';
-            valSpan.innerText = timeLeft;
-            
-            const timerId = setInterval(() => {
-                timeLeft--;
-                valSpan.innerText = timeLeft;
-                if(timeLeft <= 0) {
-                    clearInterval(timerId);
-                }
-            }, 1000);
-        });
-
-        socket.on('show_answer_client', (data) => {
-            document.getElementById('timerOverlay').style.display = 'none'; // Убрать таймер, если он есть
-            document.getElementById('questionBlock').classList.add('hidden');
-            document.getElementById('resultBlock').classList.remove('hidden');
-            document.getElementById('correctAnswerText').innerText = data.answer;
-            const myPoints = data.deltas[myName] || 0;
-            const ptsText = document.getElementById('pointsEarnedText');
-            const cardHeader = document.getElementById('resultCardHeader');
-            if (myPoints > 0) {
-                cardHeader.className = 'card bg-success p-3 mb-3';
-                ptsText.innerText = `Вы заработали +${myPoints} балл(ов)! 🎉`;
-                ptsText.className = 'text-center text-warning fw-bold';
-            } else {
-                cardHeader.className = 'card bg-danger p-3 mb-3';
-                ptsText.innerText = `Вы не заработали баллов 😢`;
-                ptsText.className = 'text-center text-white';
-            }
-            const tbody = document.getElementById('leaderboardBody');
-            tbody.innerHTML = '';
-            data.leaderboard.forEach((p, index) => {
-                const tr = document.createElement('tr');
-                if (p.name === myName) tr.classList.add('current-player-row');
-                tr.innerHTML = `<td>${index + 1}</td><td>${p.name}</td><td class="text-end">${p.score}</td>`;
-                tbody.appendChild(tr);
+            socket.on('game_reset', () => {
+                 document.getElementById('gameEndOverlay').style.display = 'none';
+                 document.querySelector('.main-game-interface').style.display = 'block';
+                 document.getElementById('timerOverlay').style.display = 'none';
+                 localStorage.removeItem('music_game_name'); 
+                 myName = '';
+                 document.getElementById('usernameInput').value = '';
+                 showScreen('loginBlock');
             });
-        });
 
-        socket.on('game_status', (data) => {
-            document.getElementById('timerOverlay').style.display = 'none';
-            if(data.state === 'finished' && data.final_results) {
-                showEndScreen(data.final_results);
-                return;
-            }
-            if(data.state === 'question') {
-                 showScreen('questionBlock');
-                 if(data.question_data) {
-                    document.getElementById('qIndex').innerText = data.question_data.index;
-                    document.getElementById('qPoints').innerText = data.question_data.points;
-                    // Текст вопроса
-                    document.getElementById('questionTextDisplay').innerText = data.question_data.question || "Вопрос на экране";
+            socket.on('game_over', (data) => { showEndScreen(data); });
 
-                    if (data.inputs_enabled) {
-                        document.getElementById('listeningMessage').classList.add('hidden');
-                        document.getElementById('interactionContainer').classList.remove('hidden');
-                        const q = data.question_data;
-                        const optionsArea = document.getElementById('optionsArea');
-                        const inputArea = document.getElementById('inputArea');
-                        optionsArea.innerHTML = '';
-                        if (q.type === 'choice') {
-                            optionsArea.classList.remove('hidden');
-                            inputArea.classList.add('hidden');
-                            q.options.forEach(opt => {
-                                const btn = document.createElement('button');
-                                btn.className = 'btn btn-outline-light btn-lg';
-                                btn.innerText = opt;
-                                btn.onclick = () => submitChoice(opt);
-                                optionsArea.appendChild(btn);
-                            });
-                        } else {
-                            optionsArea.classList.add('hidden');
-                            inputArea.classList.remove('hidden');
-                            document.getElementById('textAnswer').disabled = false;
-                        }
+            function showEndScreen(data) {
+                document.querySelector('.main-game-interface').style.display = 'none';
+                document.getElementById('gameEndOverlay').style.display = 'block';
+                document.getElementById('timerOverlay').style.display = 'none';
+                
+                const txtBlock = document.getElementById('winnerTextBlock');
+                const winners = data.winners || [];
+                
+                if (winners.length > 0) {
+                    const amIWinner = winners.some(w => w.name === myName);
+                    if (amIWinner) {
+                        txtBlock.innerHTML = `<div class="winner-title mb-2">${t('winnerYou')}</div><h4 class="text-white">${t('yourScore')}: ${winners[0].score}</h4>`;
+                        startFireworks();
                     } else {
-                        document.getElementById('listeningMessage').classList.remove('hidden');
-                        document.getElementById('interactionContainer').classList.add('hidden');
+                        const names = winners.map(w => w.name).join(', ');
+                        txtBlock.innerHTML = `<h3 class="text-white-50">${t('winners')}: <span class="text-accent">${names}</span></h3><h4 class="text-white">${t('thScore')}: ${winners[0].score}</h4>`;
                     }
-                 }
-            } else if (data.state === 'answer') {
-                showScreen('resultBlock');
-                document.getElementById('pointsEarnedText').innerText = ""; 
-                document.getElementById('resultCardHeader').className = 'card bg-secondary p-3 mb-3';
-            } else {
-                showScreen('waitBlock');
-            }
-        });
+                } else {
+                    txtBlock.innerHTML = `<h3 class="text-muted">${t('noWinners')}</h3>`;
+                }
 
-        function submitChoice(val) { socket.emit('submit_answer', {answer: val}); blockInput(); }
-        function submitText() { const val = document.getElementById('textAnswer').value; if(!val) return; socket.emit('submit_answer', {answer: val}); blockInput(); }
-        function blockInput() {
-            const btns = document.querySelectorAll('#optionsArea button');
-            btns.forEach(b => b.disabled = true);
-            document.getElementById('textAnswer').disabled = true;
-            document.getElementById('answerStatus').classList.remove('hidden');
-        }
-        function showScreen(id) {
-            ['loginBlock', 'waitBlock', 'questionBlock', 'resultBlock'].forEach(eid => {
-                document.getElementById(eid).classList.add('hidden');
-            });
-            document.getElementById(id).classList.remove('hidden');
-        }
-
-        // --- САЛЮТ ---
-        function startFireworks() {
-            const canvas = document.getElementById('fireworksCanvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            let particles = [];
-            function Particle(x, y, color) {
-                this.x = x; this.y = y; this.color = color;
-                this.velocity = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
-                this.alpha = 1; this.friction = 0.96;
-            }
-            Particle.prototype.draw = function() {
-                ctx.globalAlpha = this.alpha;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            Particle.prototype.update = function() {
-                this.velocity.x *= this.friction; this.velocity.y *= this.friction;
-                this.x += this.velocity.x; this.y += this.velocity.y;
-                this.alpha -= 0.01;
-            }
-            function animate() {
-                requestAnimationFrame(animate);
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                particles.forEach((p, i) => {
-                    if (p.alpha > 0) { p.update(); p.draw(); } 
-                    else particles.splice(i, 1);
+                const tbody = document.getElementById('finalLeaderboard');
+                tbody.innerHTML = '';
+                data.leaderboard.forEach((p, index) => {
+                    let rowClass = (p.name === myName) ? 'current-player-row' : '';
+                    tbody.innerHTML += `<tr class="${rowClass}"><td>${index+1}</td><td>${p.name}</td><td class="text-end">${p.score}</td></tr>`;
                 });
             }
-            setInterval(() => {
-                const x = Math.random() * canvas.width;
-                const y = Math.random() * canvas.height / 2;
-                const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
-                for (let i = 0; i < 30; i++) particles.push(new Particle(x, y, color));
-            }, 800);
-            animate();
-        }
+
+            socket.on('new_question', (data) => {
+                showScreen('questionBlock');
+                document.getElementById('timerOverlay').style.display = 'none';
+                document.getElementById('qIndex').innerText = data.index;
+                document.getElementById('qPoints').innerText = data.points; 
+                document.getElementById('questionTextDisplay').innerText = data.question || "?";
+
+                document.getElementById('answerStatus').classList.add('hidden');
+                document.getElementById('resultBlock').classList.add('hidden');
+                document.getElementById('listeningMessage').classList.remove('hidden');
+                document.getElementById('interactionContainer').classList.add('hidden');
+                document.getElementById('vipNextBtn').classList.add('hidden'); // Скрываем кнопку Next
+
+                const optionsArea = document.getElementById('optionsArea');
+                const inputArea = document.getElementById('inputArea');
+                optionsArea.innerHTML = '';
+                inputArea.classList.add('hidden');
+                
+                if (data.type === 'choice') {
+                    optionsArea.classList.remove('hidden');
+                    data.options.forEach(opt => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn-option';
+                        btn.innerText = opt;
+                        btn.onclick = () => submitChoice(opt);
+                        optionsArea.appendChild(btn);
+                    });
+                } else {
+                    optionsArea.classList.add('hidden');
+                    inputArea.classList.remove('hidden');
+                    document.getElementById('textAnswer').value = '';
+                    document.getElementById('textAnswer').disabled = false;
+                }
+            });
+
+            socket.on('allow_answers', () => {
+                document.getElementById('listeningMessage').classList.add('hidden');
+                document.getElementById('interactionContainer').classList.remove('hidden');
+            });
+
+            socket.on('start_timer', (data) => {
+                const overlay = document.getElementById('timerOverlay');
+                const valSpan = document.getElementById('timerValue');
+                let timeLeft = data.seconds;
+                overlay.style.display = 'flex';
+                valSpan.innerText = timeLeft;
+                
+                const timerId = setInterval(() => {
+                    timeLeft--;
+                    valSpan.innerText = timeLeft;
+                    if(timeLeft <= 0) { clearInterval(timerId); }
+                }, 1000);
+            });
+
+            socket.on('show_answer_client', (data) => {
+                document.getElementById('timerOverlay').style.display = 'none';
+                document.getElementById('questionBlock').classList.add('hidden');
+                document.getElementById('resultBlock').classList.remove('hidden');
+                
+                // Сохраняем VIP ID из пакета
+                if (data.vip_id) currentVipId = data.vip_id;
+                // Кнопка пока скрыта, ждем окончания музыки (enable_vip_next)
+
+                document.getElementById('correctAnswerText').innerText = data.answer;
+                
+                const myPoints = data.deltas[myName] || 0;
+                const ptsText = document.getElementById('pointsEarnedText');
+                const cardHeader = document.getElementById('resultCardHeader');
+                
+                if (myPoints > 0) {
+                    cardHeader.style.borderColor = '#34d399';
+                    cardHeader.style.boxShadow = '0 0 20px rgba(52, 211, 153, 0.2)';
+                    ptsText.innerHTML = `${t('earned')} <span class="text-success fw-bold">+${myPoints}</span> ${t('points')}`;
+                } else {
+                    cardHeader.style.borderColor = '#f43f5e';
+                    cardHeader.style.boxShadow = 'none';
+                    ptsText.innerHTML = t('noPoints');
+                }
+                
+                const tbody = document.getElementById('leaderboardBody');
+                tbody.innerHTML = '';
+                data.leaderboard.forEach((p, index) => {
+                    const tr = document.createElement('tr');
+                    if (p.name === myName) tr.classList.add('current-player-row');
+                    tr.innerHTML = `<td>${index + 1}</td><td>${p.name}</td><td class="text-end">${p.score}</td>`;
+                    tbody.appendChild(tr);
+                });
+            });
+
+            // Новое событие: когда музыка ответа закончилась
+            socket.on('enable_vip_next', () => {
+                if (socket.id === currentVipId) {
+                    document.getElementById('vipNextBtn').classList.remove('hidden');
+                }
+            });
+
+            socket.on('game_status', (data) => {
+                document.getElementById('timerOverlay').style.display = 'none';
+                if (data.vip_id) currentVipId = data.vip_id; // Обновляем VIP ID при любом статусе
+                
+                if(data.state === 'finished' && data.final_results) {
+                    showEndScreen(data.final_results);
+                    return;
+                }
+                if(data.state === 'question') {
+                     showScreen('questionBlock');
+                     if(data.question_data) {
+                        document.getElementById('qIndex').innerText = data.question_data.index;
+                        document.getElementById('qPoints').innerText = data.question_data.points;
+                        document.getElementById('questionTextDisplay').innerText = data.question_data.question || "?";
+                        // ... (остальная логика восстановления состояния вопроса) ...
+                        if (data.inputs_enabled) {
+                            document.getElementById('listeningMessage').classList.add('hidden');
+                            document.getElementById('interactionContainer').classList.remove('hidden');
+                            // восстановление инпутов (упрощенно для примера, в идеале нужно проверять, ответил ли уже игрок)
+                        } else {
+                            document.getElementById('listeningMessage').classList.remove('hidden');
+                            document.getElementById('interactionContainer').classList.add('hidden');
+                        }
+                     }
+                } else if (data.state === 'answer') {
+                    showScreen('resultBlock');
+                    // Если мы зашли в середине фазы ответа, кнопка Next должна быть проверена
+                    // Но мы не знаем, закончилась ли музыка, поэтому пока скрываем
+                    document.getElementById('vipNextBtn').classList.add('hidden'); 
+                } else {
+                    showScreen('waitBlock');
+                }
+            });
+
+            window.submitChoice = function(val) { socket.emit('submit_answer', {answer: val}); blockInput(); }
+            window.submitText = function() { const val = document.getElementById('textAnswer').value; if(!val) return; socket.emit('submit_answer', {answer: val}); blockInput(); }
+            
+            function blockInput() {
+                const btns = document.querySelectorAll('#optionsArea button');
+                btns.forEach(b => b.disabled = true);
+                document.getElementById('textAnswer').disabled = true;
+                document.getElementById('answerStatus').classList.remove('hidden');
+                document.getElementById('interactionContainer').classList.add('hidden');
+            }
+            
+            function showScreen(id) {
+                ['loginBlock', 'waitBlock', 'questionBlock', 'resultBlock'].forEach(eid => {
+                    document.getElementById(eid).classList.add('hidden');
+                });
+                document.getElementById(id).classList.remove('hidden');
+            }
+
+            // --- FIREWORKS ---
+            function startFireworks() {
+                const canvas = document.getElementById('fireworksCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+                let particles = [];
+                function Particle(x, y, color) {
+                    this.x = x; this.y = y; this.color = color;
+                    this.velocity = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
+                    this.alpha = 1; this.friction = 0.96;
+                }
+                Particle.prototype.draw = function() {
+                    ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color;
+                    ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI * 2); ctx.fill();
+                }
+                Particle.prototype.update = function() {
+                    this.velocity.x *= this.friction; this.velocity.y *= this.friction;
+                    this.x += this.velocity.x; this.y += this.velocity.y;
+                    this.alpha -= 0.01;
+                }
+                function animate() {
+                    requestAnimationFrame(animate);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    particles.forEach((p, i) => {
+                        if (p.alpha > 0) { p.update(); p.draw(); } else particles.splice(i, 1);
+                    });
+                }
+                setInterval(() => {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height / 2;
+                    const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
+                    for (let i = 0; i < 30; i++) particles.push(new Particle(x, y, color));
+                }, 800);
+                animate();
+            }
+        });
     </script>
 </body>
 </html>

@@ -3,13 +3,21 @@ import json
 import uuid
 import string
 from functools import wraps
+import eventlet
+eventlet.monkey_patch()
+# -------------------------
 from flask import Flask, render_template, request, Response, send_from_directory
 from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, cors_allowed_origins="*")
-
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='eventlet',
+    logger=True, 
+    engineio_logger=False
+)
 # --- CONFIG ---
 ADMIN_USER = "admin"
 ADMIN_PASS = "password"
@@ -27,7 +35,8 @@ class GameState:
         self.current_phase = 'idle' 
         self.inputs_enabled = False
         self.final_results = None
-        self.auto_answer_task = None # Для хранения задачи таймера
+        self.auto_answer_task = None
+        self.vip_player_sid = None  # ID первого игрока (управляющего)
 
 game = GameState()
 
@@ -75,18 +84,47 @@ def admin():
 # --- SOCKETS ---
 @socketio.on('connect')
 def on_connect():
-    print('Client connected')
+    print(f'Client connected: {request.sid}')
+
+@socketio.on('disconnect')
+def on_disconnect():
+    print(f'Client disconnected: {request.sid}')
+    # Если отключился VIP-игрок, передаем права следующему
+    if game.vip_player_sid == request.sid:
+        if game.players:
+            # Берем первого попавшегося оставшегося игрока (не самого себя, т.к. из players он сейчас удалится)
+            remaining_sids = [sid for sid in game.players.keys() if sid != request.sid]
+            if remaining_sids:
+                game.vip_player_sid = remaining_sids[0]
+                print(f"New VIP assigned: {game.vip_player_sid}")
+            else:
+                game.vip_player_sid = None
+        else:
+            game.vip_player_sid = None
+    
+    # Удаляем игрока из списка активных (опционально, зависит от вашей логики переподключения)
+    # В текущей логике мы не удаляем игрока полностью при разрыве соединения, 
+    # чтобы он мог перезайти. Но для корректного VIP статуса нужно понимать, кто онлайн.
+    # Для упрощения оставим логику переназначения VIP выше, а полное удаление данных игрока делать не будем.
 
 @socketio.on('join_game')
 def on_join(data):
     name = data.get('name').strip()
     if not name: return
     
+    # Логика VIP: Если нет VIP или список игроков был пуст, назначаем текущего
+    if game.vip_player_sid is None:
+        game.vip_player_sid = request.sid
+        print(f"VIP assigned to {name} ({request.sid})")
+
     if name in game.player_names_map:
         old_sid = game.player_names_map[name]
         score = 0
         if old_sid in game.players:
             score = game.players[old_sid]['score']
+            # Если перезаходит старый VIP, нужно проверить, не потерял ли он права
+            if old_sid == game.vip_player_sid:
+                game.vip_player_sid = request.sid
             del game.players[old_sid]
         game.player_names_map[name] = request.sid
         game.players[request.sid] = {'name': name, 'score': score, 'last_answer': None}
@@ -95,7 +133,12 @@ def on_join(data):
         game.players[request.sid] = {'name': name, 'score': 0, 'last_answer': None}
 
     join_room('players')
-    emit('game_status', _get_client_state(), to=request.sid)
+    
+    # Отправляем состояние клиенту с информацией о VIP
+    client_state = _get_client_state()
+    client_state['vip_id'] = game.vip_player_sid
+    emit('game_status', client_state, to=request.sid)
+    
     _broadcast_admin_info()
 
 @socketio.on('submit_answer')
@@ -113,21 +156,24 @@ def on_answer(data):
         answered_count = sum(1 for p in game.players.values() if p['last_answer'] is not None)
         
         if total_players > 0 and answered_count == total_players:
-            # Блокируем ввод, чтобы не спамили
             game.inputs_enabled = False
-            # Запускаем таймер на клиентах
             socketio.emit('start_timer', {'seconds': 3}, to='players')
-            # Запускаем фоновую задачу на сервере
             socketio.start_background_task(_auto_show_answer_task)
 
 def _auto_show_answer_task():
-    """Фоновая задача: ждет 3 секунды и раскрывает ответ."""
     socketio.sleep(3)
-    # Проверяем, что фаза всё ещё 'question' (админ мог нажать "завершить" или "ответ" сам)
     if game.is_active and game.current_phase == 'question':
-        # Используем контекст приложения, если нужно (для Flask-SocketIO обычно не обязательно, но безопасно)
         with app.app_context():
             _reveal_answer_logic()
+
+# --- PLAYER ACTIONS (VIP) ---
+@socketio.on('player_next_question')
+def on_player_next():
+    # Проверка: только VIP может это делать
+    if request.sid != game.vip_player_sid:
+        return
+    # Вызываем ту же логику, что и админ
+    admin_next()
 
 # --- ADMIN ACTIONS ---
 @socketio.on('admin_start_game')
@@ -142,6 +188,7 @@ def admin_start():
     
     game.players = {}
     game.player_names_map = {} 
+    game.vip_player_sid = None # Сброс VIP
     
     _broadcast_admin_info()
     socketio.emit('game_reset', to='players')
@@ -165,38 +212,42 @@ def admin_next():
         payload = {
             'type': q_data['type'],
             'options': q_data['options'],
-            'question': q_data.get('question', ''), # <-- ДОБАВЛЕНО ПОЛЕ ВОПРОСА
+            'question': q_data.get('question', ''),
             'index': game.current_q_index + 1,
             'inputs_enabled': False,
             'points': points
         }
         socketio.emit('new_question', payload, to='players')
-        emit('play_audio', {'file': f"{q_data['id']}-1.mp3"}, to=request.sid)
+        
+        socketio.emit('play_audio', {'file': f"{q_data['id']}-1.mp3"}, to='admin_room')
+        
         _broadcast_admin_info()
 
 @socketio.on('admin_audio_finished')
 def admin_audio_finished():
-    if game.is_active and game.current_phase == 'question':
-        game.inputs_enabled = True
-        socketio.emit('allow_answers', to='players')
+    """Вызывается клиентом админа, когда аудио закончилось"""
+    if game.is_active:
+        if game.current_phase == 'question':
+            game.inputs_enabled = True
+            socketio.emit('allow_answers', to='players')
+        elif game.current_phase == 'answer':
+            socketio.emit('enable_vip_next', to='players')
 
 @socketio.on('admin_repeat_question')
 def admin_repeat():
     if game.current_q_index >= 0 and game.current_q_index < len(game.questions):
         q_id = game.questions[game.current_q_index]['id']
-        emit('play_audio', {'file': f"{q_id}-1.mp3"}, to=request.sid)
+        socketio.emit('play_audio', {'file': f"{q_id}-1.mp3"}, to='admin_room')
 
 @socketio.on('admin_show_answer')
 def admin_show_answer():
-    # Вызываем общую логику (ручное нажатие)
     _reveal_answer_logic()
 
 def _reveal_answer_logic():
-    """Логика подсчета очков и переключения фазы."""
     if game.current_phase != 'question': return
     
     game.current_phase = 'answer'
-    game.inputs_enabled = False # На всякий случай блокируем
+    game.inputs_enabled = False
     
     q_data = game.questions[game.current_q_index]
     correct_raw = q_data['answer']
@@ -232,13 +283,14 @@ def _reveal_answer_logic():
         leaderboard.append({'name': p['name'], 'score': p['score']})
     leaderboard.sort(key=lambda x: x['score'], reverse=True)
             
+    # Отправляем результаты и VIP ID, чтобы клиент знал, кто главный
     socketio.emit('show_answer_client', {
         'answer': correct_raw,
         'deltas': round_deltas,
-        'leaderboard': leaderboard
+        'leaderboard': leaderboard,
+        'vip_id': game.vip_player_sid
     }, to='players')
     
-    # Отправляем админу (через broadcast или напрямую, если вызвано из потока, request.sid может не быть)
     socketio.emit('play_audio', {'file': f"{q_data['id']}-2.mp3"}, to='admin_room')
     socketio.emit('round_results', round_results_admin, to='admin_room')
     _broadcast_admin_info()
@@ -293,10 +345,11 @@ def _get_client_state():
     return {
         'state': game.current_phase,
         'inputs_enabled': game.inputs_enabled,
+        'vip_id': game.vip_player_sid, # Важно передавать это состояние
         'question_data': {
             'type': q_data['type'],
             'options': q_data['options'],
-            'question': q_data.get('question', ''), # <-- ДОБАВЛЕНО ПОЛЕ
+            'question': q_data.get('question', ''),
             'index': game.current_q_index + 1,
             'points': points
         }
@@ -335,4 +388,5 @@ def join_admin_room():
 
 if __name__ == '__main__':
     if not os.path.exists(MEDIA_FOLDER): os.makedirs(MEDIA_FOLDER)
+    # Для локальной разработки можно оставить так, но для продакшена см. инструкцию выше
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

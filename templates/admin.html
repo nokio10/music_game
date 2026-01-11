@@ -1,381 +1,597 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Админ - ЧО? ЗА? ТРЕК?</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - PURPLE EDITION</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
     <style>
-        body { overflow-x: hidden; }
-        .q-done { color: green; font-weight: bold; }
-        .q-current { color: blue; font-weight: bold; border: 2px solid blue; padding: 2px; border-radius: 5px; background: rgba(0,0,255,0.05); }
-        .answered-badge { width: 10px; height: 10px; background-color: green; border-radius: 50%; display: inline-block; }
-        .ans-card { transition: all 0.3s; font-size: 1.1em; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .ans-correct { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
-        .ans-wrong { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
-
-        /* --- ИЗМЕНЕННЫЙ БЛОК ДЛЯ СПИСКА ТРЕКОВ --- */
-        #questionsList { 
-            list-style: none;
-            padding: 0;
-            display: grid;
-            /* Ровно 10 строк */
-            grid-template-rows: repeat(8, auto); 
-            /* Заполнять колонками */
-            grid-auto-flow: column; 
-            /* Расстояние между колонками и строками */
-            column-gap: 20px;
-            row-gap: 5px;
-        }
-        /* Чтобы карточка растягивалась под контент, если колонок много */
-        .track-list-container {
-            overflow-x: auto; 
+        :root {
+            --bg-dark: #0f0c29;
+            --bg-gradient: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            --glass-bg: rgba(20, 20, 40, 0.7);
+            --glass-border: rgba(167, 139, 250, 0.15);
+            --primary-purple: #8b5cf6;
+            --primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+            --primary-glow: 0 4px 15px rgba(139, 92, 246, 0.4);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
         }
 
-        @keyframes rainbow {
-            0% { color: #dc3545; } 20% { color: #fd7e14; } 40% { color: #ffc107; }
-            60% { color: #28a745; } 80% { color: #007bff; } 100% { color: #6610f2; }
+        body {
+            background: var(--bg-dark);
+            background-image: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
+        
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 25px;
+        }
+
+        /* --- BUTTONS --- */
+        .btn-purple-main {
+            background: var(--primary-gradient);
+            border: none; color: white; font-weight: 600; letter-spacing: 0.5px;
+            box-shadow: var(--primary-glow); transition: all 0.3s ease;
+        }
+        .btn-purple-main:hover {
+            transform: translateY(-2px); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6); color: white;
+        }
+        
+        .btn-restart-mode {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); border: none; color: white; font-weight: 600;
+        }
+        .btn-restart-mode:hover { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6); color: white; }
+
+        .btn-purple-ghost {
+            background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; transition: all 0.3s;
+        }
+        .btn-purple-ghost:hover:not(:disabled) {
+            background: rgba(139, 92, 246, 0.2); border-color: #8b5cf6; color: white;
+        }
+        .btn-purple-ghost:disabled { border-color: transparent; color: #475569; }
+
+        .btn-danger-ghost {
+            background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2); color: #fda4af;
+        }
+        .btn-danger-ghost:hover:not(:disabled) {
+            background: rgba(244, 63, 94, 0.2); color: white; box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+        }
+
+        /* Lang Switcher */
+        .lang-btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-muted); border-radius: 20px; padding: 5px 15px;
+            font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.3s;
+        }
+        .lang-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+        .lang-btn .active-lang { color: var(--primary-purple); }
+
+        /* UI ELEMENTS */
         .game-title {
-            font-weight: 900; text-transform: uppercase; text-align: center; margin-bottom: 20px;
-            animation: rainbow 5s infinite; text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+            background: linear-gradient(to right, #c084fc, #8b5cf6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
         }
 
-        #gameEndOverlay {
-            display: none;
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 2000;
-            color: white; overflow-y: auto; padding: 20px;
-            text-align: center;
+        #questionsList li {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-muted); border-radius: 12px; padding: 8px 12px; font-size: 0.85rem; transition: 0.3s;
         }
-        canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 1000; }
-        .winner-name { font-size: 4rem; font-weight: bold; color: #ffc107; text-shadow: 0 0 20px rgba(255,193,7,0.5); }
-        .podium-table { max-width: 600px; margin: 0 auto; background: rgba(255,255,255,0.1); border-radius: 10px; }
+        #questionsList li.q-current {
+            background: var(--primary-gradient); color: white; border-color: transparent;
+            box-shadow: var(--primary-glow); transform: scale(1.05);
+        }
+        #questionsList li.q-done { color: #34d399; border-color: rgba(52, 211, 153, 0.2); }
+
+        .player-item {
+            background: rgba(255,255,255,0.02); border-radius: 16px; padding: 12px 16px;
+            margin-bottom: 8px; border: 1px solid transparent; transition: 0.2s;
+        }
+        .score-control-btn {
+            width: 28px; height: 28px; border-radius: 50%; border: none; display: flex; 
+            align-items: center; justify-content: center; font-size: 0.8rem; cursor: pointer; transition: 0.2s;
+        }
+        .btn-plus { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .btn-plus:hover { background: #10b981; color: white; }
+        .btn-minus { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
+        .btn-minus:hover { background: #f43f5e; color: white; }
+
+        #adminAudio { filter: sepia(100%) hue-rotate(240deg) saturate(200%) invert(1); width: 100%; height: 40px; border-radius: 20px; opacity: 0.8; }
+
+        /* OVERLAY */
+        #gameEndOverlay {
+            display: none !important; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 12, 41, 0.95); z-index: 99999;
+            align-items: center; justify-content: center; flex-direction: column; backdrop-filter: blur(15px);
+        }
+        #gameEndOverlay.show { display: flex !important; }
+        .overlay-card {
+            background: linear-gradient(145deg, #1e1b4b, #312e81);
+            border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 0 80px rgba(139, 92, 246, 0.2);
+            border-radius: 30px; padding: 40px; width: 90%; max-width: 650px; text-align: center; position: relative;
+        }
+
+        canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 5000; }
+        
+        .ans-card {
+            background: rgba(30, 27, 75, 0.8); border: 1px solid rgba(255,255,255,0.05);
+            margin: 10px; padding: 15px; border-radius: 16px; min-width: 180px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .ans-correct { border-bottom: 4px solid #34d399; }
+        .ans-wrong { border-bottom: 4px solid #f43f5e; }
     </style>
 </head>
-<body class="bg-light">
-    
-    <canvas id="fireworksCanvas"></canvas>
+<body>
 
-    <!-- ИНТЕРФЕЙС ФИНАЛА -->
+    <!-- OVERLAY -->
     <div id="gameEndOverlay">
-        <div class="container mt-5">
-            <h1 class="mb-4">🎉 ИГРА ЗАВЕРШЕНА! 🎉</h1>
-            <h3 class="text-white-50" id="winnerText">Победители:</h3>
-            <div id="finalWinnerName" class="winner-name mb-2"></div>
-            <h2 id="finalWinnerScore" class="mb-5 text-warning"></h2>
+        <div class="overlay-card">
+            <button id="btnForceClose" style="position: absolute; top: 20px; right: 20px; background: none; border: none; color: #6366f1; font-size: 1.5rem; cursor: pointer;">
+                <i class="fas fa-times"></i>
+            </button>
             
-            <div class="podium-table p-3">
-                <h4 class="mb-3">🏆 Итоговая таблица 🏆</h4>
-                <table class="table table-dark table-striped">
-                    <thead><tr><th>#</th><th>Имя</th><th>Баллы</th></tr></thead>
+            <h1 class="mb-2" style="color: #c4b5fd;" data-i18n="gameFinished">🏆 GAME FINISHED 🏆</h1>
+            <p id="winnerText" class="text-uppercase" style="letter-spacing: 2px; color: #818cf8; font-size: 0.9rem;" data-i18n="winnerTitle">WINNER</p>
+            <h2 id="finalWinnerName" class="mb-4 fw-bold" style="font-size: 3.5rem; background: linear-gradient(to right, #a78bfa, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></h2>
+            
+            <div class="p-3 rounded-4 mb-4" style="background: rgba(0,0,0,0.2); max-height: 200px; overflow-y: auto;">
+                <table class="table table-dark table-borderless table-sm mb-0 bg-transparent">
+                    <thead><tr style="color: #818cf8; border-bottom: 1px solid rgba(129, 140, 248, 0.2);"><th>#</th><th data-i18n="thName">Name</th><th class="text-end" data-i18n="thScore">Score</th></tr></thead>
                     <tbody id="finalLeaderboard"></tbody>
                 </table>
             </div>
             
-            <!-- КНОПКА ПЕРЕЗАПУСКА (Очищает экран и начинает игру) -->
-            <button onclick="restartGameFull()" class="btn btn-success mt-5 btn-lg">Начать новую игру</button>
-            <br>
-            <button onclick="closeEndScreen()" class="btn btn-outline-secondary mt-3 btn-sm">Просто посмотреть салют</button>
+            <div class="d-grid gap-3">
+                <button id="btnRestartOverlay" class="btn btn-purple-main btn-lg rounded-pill py-3">
+                    <i class="fas fa-redo me-2"></i> <span data-i18n="btnNewGame">START NEW GAME</span>
+                </button>
+            </div>
         </div>
     </div>
+    
+    <canvas id="fireworksCanvas"></canvas>
 
-    <!-- ОСНОВНОЙ ИНТЕРФЕЙС -->
-    <div class="container mt-4 mb-5 main-interface">
-        <h1 class="game-title">🎧 ЧО? ЗА? ТРЕК? 🎶</h1>
-        <audio id="adminAudio" controls class="w-100 mb-3"></audio>
-        
-        <div class="row">
-            <div class="col-md-8">
-                <div class="card p-3 mb-3">
-                    <div id="controls">
-                        <button onclick="startGame()" class="btn btn-primary mb-2" id="btnStart">Начать игру ▶️</button>
-                        <button onclick="endGame()" class="btn btn-danger mb-2" id="btnEnd" disabled>Завершить ⏹️</button>
-                        <hr>
-                        <div id="gameControls" style="display:none;">
-                            <h4>Раунд № <span id="qNum">0</span></h4>
-                            <div id="adminOptionsContainer" class="my-3 p-3 border rounded bg-white" style="display:none;">
-                                <h6 class="text-muted">Варианты ответов:</h6>
-                                <div id="adminOptionsList" class="d-flex flex-wrap gap-2"></div>
-                            </div>
-                            <div class="btn-group" role="group">
-                                <button onclick="nextQuestion()" class="btn btn-success" id="btnNext">След. вопрос ⏭️</button>
-                                <button onclick="repeatQuestion()" class="btn btn-warning" id="btnRepeat" disabled>Повторить 🔄</button>
-                                <button onclick="showAnswer()" class="btn btn-info" id="btnShow" disabled>Ответ 💡</button>
-                            </div>
+    <!-- INTERFACE -->
+    <div class="container py-5" style="position: relative; z-index: 1;">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-5">
+            <div class="d-flex align-items-center gap-3">
+                <div style="width: 50px; height: 50px; background: var(--primary-gradient); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--primary-glow);">
+                    <i class="fas fa-music text-white fs-4"></i>
+                </div>
+                <div>
+                    <h2 class="game-title mb-0 h4" data-i18n="gameTitle">WHAT? THE? TRACK?</h2>
+                    <span class="text-muted small" style="letter-spacing: 1px;" data-i18n="adminPanel">ADMIN PANEL</span>
+                </div>
+            </div>
+            
+            <div class="d-flex align-items-center gap-3">
+                <button id="langToggle" class="lang-btn">
+                    <span id="langEn">EN</span> / <span id="langRu">RU</span>
+                </button>
+                <div id="connectionStatus" class="badge rounded-pill bg-warning bg-opacity-25 text-warning border border-warning px-3 py-2">
+                     <i class="fas fa-circle-notch fa-spin me-2"></i> <span data-i18n="statusConnecting">Connecting...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Left Column -->
+            <div class="col-lg-8">
+                <div class="glass-card mb-4">
+                    <audio id="adminAudio" controls class="mb-4"></audio>
+                    
+                    <div class="d-flex gap-3 mb-4">
+                        <button id="btnStart" class="btn btn-purple-main flex-grow-1 py-3 rounded-4">
+                            <i class="fas fa-play me-2"></i> <span id="txtStartBtn" data-i18n="btnStart">START GAME</span>
+                        </button>
+                        <button id="btnEnd" class="btn btn-danger-ghost flex-grow-1 py-3 rounded-4" disabled>
+                            <i class="fas fa-stop me-2"></i> <span data-i18n="btnEnd">FINISH</span>
+                        </button>
+                    </div>
+
+                    <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;"></div>
+
+                    <!-- Round Controls -->
+                    <div id="gameControls" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span style="color: #a78bfa; font-weight: 600;" data-i18n="activeRound">ACTIVE ROUND</span>
+                            <span class="badge bg-primary rounded-pill">#<span id="qNum">0</span></span>
+                        </div>
+                        
+                        <div id="adminHintBox" style="display:none; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; padding: 15px; border-radius: 0 10px 10px 0; margin-bottom: 20px;">
+                            <small style="color: #a78bfa; text-transform: uppercase; font-size: 0.7rem; display: block; margin-bottom: 4px;" data-i18n="correctAnswerLabel">Correct Answer</small>
+                            <div id="adminHintText" style="color: white; font-weight: 500; font-size: 1.1rem;"></div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button id="btnNext" class="btn btn-purple-ghost flex-grow-1 py-2 rounded-3">
+                                <span data-i18n="btnNext">NEXT</span> <i class="fas fa-chevron-right ms-1"></i>
+                            </button>
+                            <button id="btnRepeat" class="btn btn-purple-ghost py-2 rounded-3" disabled><i class="fas fa-redo"></i></button>
+                            <button id="btnShow" class="btn btn-purple-ghost flex-grow-1 py-2 rounded-3" disabled>
+                                <i class="far fa-eye ms-1"></i> <span data-i18n="btnAnswer">ANSWER</span>
+                            </button>
                         </div>
                     </div>
                 </div>
-                <div class="card p-3 track-list-container">
-                    <h5>Список треков</h5>
-                    <ul id="questionsList" class="list-group list-group-flush"></ul>
+
+                <!-- Playlist -->
+                <div class="glass-card p-4">
+                    <h6 class="text-muted text-uppercase mb-3" style="font-size: 0.75rem; letter-spacing: 1px;" data-i18n="playlistQueue">Playlist Queue</h6>
+                    <ul id="questionsList" class="list-unstyled d-flex flex-wrap gap-2 mb-0"></ul>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5>Топ Игроков (<span id="playerCount">0</span>)</h5>
-                    <ul id="playersList" class="list-group"></ul>
+
+            <!-- Right Column -->
+            <div class="col-lg-4">
+                <div class="glass-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="mb-0 fw-bold" data-i18n="playersTitle">PLAYERS</h5>
+                        <span class="badge bg-dark text-white-50" id="playerCount">0</span>
+                    </div>
+                    <div id="playersList" style="max-height: 600px; overflow-y: auto; padding-right: 5px;"></div>
                 </div>
             </div>
         </div>
-        <div id="answersSection" class="mt-5 text-center" style="display: none;">
-            <hr>
-            <h3 class="mb-4">Ответы игроков:</h3>
-            <div id="answersWall" class="row justify-content-center g-3"></div>
+
+        <!-- Answers -->
+        <div id="answersSection" class="mt-5" style="display:none;">
+            <div class="text-center mb-4">
+                <span style="background: var(--glass-bg); padding: 10px 20px; border-radius: 30px; border: 1px solid var(--glass-border); color: #c4b5fd;">
+                    <i class="fas fa-comment-dots me-2"></i> <span data-i18n="playerAnswers">Player Answers</span>
+                </span>
+            </div>
+            <div id="answersWall" class="d-flex flex-wrap justify-content-center"></div>
         </div>
     </div>
 
     <script>
-        const socket = io();
-        const audioPlayer = document.getElementById('adminAudio');
-        let currentPhase = 'idle'; 
-        let currentQuestionData = null; 
-        let endScreenDismissed = false;
-        let animationFrameId; // Для контроля анимации
+    // --- TRANSLATION DICTIONARY ---
+    const i18n = {
+        en: {
+            gameTitle: "WHAT? THE? TRACK?",
+            adminPanel: "ADMIN PANEL",
+            statusConnecting: "Connecting...",
+            statusOnline: "Online",
+            statusOffline: "Offline",
+            btnStart: "START GAME",
+            btnRestart: "RESTART",
+            btnEnd: "FINISH",
+            activeRound: "ACTIVE ROUND",
+            correctAnswerLabel: "CORRECT ANSWER",
+            btnNext: "NEXT",
+            btnAnswer: "ANSWER",
+            playlistQueue: "PLAYLIST QUEUE",
+            playersTitle: "PLAYERS",
+            playerAnswers: "PLAYER ANSWERS",
+            noAnswers: "No answers yet",
+            gameFinished: "🏆 GAME FINISHED 🏆",
+            winnerTitle: "WINNER",
+            winnersTitle: "WINNERS",
+            thName: "Name",
+            thScore: "Score",
+            btnNewGame: "START NEW GAME",
+            track: "Track"
+        },
+        ru: {
+            gameTitle: "ЧО? ЗА? ТРЕК?",
+            adminPanel: "ПАНЕЛЬ АДМИНА",
+            statusConnecting: "Подключение...",
+            statusOnline: "Онлайн",
+            statusOffline: "Оффлайн",
+            btnStart: "НАЧАТЬ ИГРУ",
+            btnRestart: "ПЕРЕЗАПУСТИТЬ",
+            btnEnd: "ЗАВЕРШИТЬ",
+            activeRound: "ТЕКУЩИЙ РАУНД",
+            correctAnswerLabel: "ПРАВИЛЬНЫЙ ОТВЕТ",
+            btnNext: "СЛЕДУЮЩИЙ",
+            btnAnswer: "ОТВЕТ",
+            playlistQueue: "ПЛЕЙЛИСТ",
+            playersTitle: "ИГРОКИ",
+            playerAnswers: "ОТВЕТЫ ИГРОКОВ",
+            noAnswers: "Нет ответов",
+            gameFinished: "🏆 ИГРА ЗАВЕРШЕНА 🏆",
+            winnerTitle: "ПОБЕДИТЕЛЬ",
+            winnersTitle: "ПОБЕДИТЕЛИ",
+            thName: "Имя",
+            thScore: "Баллы",
+            btnNewGame: "НОВАЯ ИГРА",
+            track: "Трек"
+        }
+    };
 
-        socket.on('connect', () => { socket.emit('join_admin'); });
+    let currentLang = localStorage.getItem('adminLang') || 'en';
+
+    function t(key) {
+        return i18n[currentLang][key] || key;
+    }
+
+    function applyLanguage() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.dataset.i18n;
+            el.innerText = t(key);
+        });
+
+        const enSpan = document.getElementById('langEn');
+        const ruSpan = document.getElementById('langRu');
+        if (currentLang === 'en') {
+            enSpan.classList.add('active-lang');
+            ruSpan.classList.remove('active-lang');
+        } else {
+            enSpan.classList.remove('active-lang');
+            ruSpan.classList.add('active-lang');
+        }
+        
+        localStorage.setItem('adminLang', currentLang);
+        
+        const socket = window.socketRef;
+        if(socket && socket.connected) {
+             updateConnectionStatus('online');
+        } else if (socket) {
+             updateConnectionStatus('offline');
+        }
+    }
+
+    function updateConnectionStatus(status) {
+        const el = document.getElementById('connectionStatus');
+        if (!el) return;
+        
+        if (status === 'online') {
+            el.innerHTML = `<i class="fas fa-wifi me-2"></i> ${t('statusOnline')}`;
+            el.className = 'badge rounded-pill bg-success bg-opacity-25 text-success border border-success px-3 py-2';
+        } else if (status === 'offline') {
+            el.innerHTML = `<i class="fas fa-slash me-2"></i> ${t('statusOffline')}`;
+            el.className = 'badge rounded-pill bg-danger bg-opacity-25 text-danger border border-danger px-3 py-2';
+        } else {
+            el.innerHTML = `<i class="fas fa-circle-notch fa-spin me-2"></i> ${t('statusConnecting')}`;
+            el.className = 'badge rounded-pill bg-warning bg-opacity-25 text-warning border border-warning px-3 py-2';
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const socket = io();
+        window.socketRef = socket; 
+        applyLanguage();
+
+        document.getElementById('langToggle').addEventListener('click', () => {
+            currentLang = currentLang === 'en' ? 'ru' : 'en';
+            applyLanguage();
+            updateStartButtonText();
+        });
+        
+        const overlay = document.getElementById('gameEndOverlay');
+        const audioPlayer = document.getElementById('adminAudio');
+        let endScreenDismissed = false; 
+        let animationId = null;
+        let isGameActive = false; 
+
+        const btnStart = document.getElementById('btnStart');
+        btnStart.addEventListener('click', () => socket.emit('admin_start_game'));
+
+        document.getElementById('btnEnd').addEventListener('click', () => socket.emit('admin_end_game'));
+        document.getElementById('btnNext').addEventListener('click', () => socket.emit('admin_next_question'));
+        document.getElementById('btnRepeat').addEventListener('click', () => socket.emit('admin_repeat_question'));
+        document.getElementById('btnShow').addEventListener('click', () => socket.emit('admin_show_answer'));
+
+        const closeOverlay = () => { overlay.classList.remove('show'); stopFireworks(); };
+        const openOverlay = () => { overlay.classList.add('show'); startFireworks(); };
+        
+        document.getElementById('btnForceClose').addEventListener('click', () => { endScreenDismissed = true; closeOverlay(); });
+        document.getElementById('btnRestartOverlay').addEventListener('click', () => {
+            endScreenDismissed = true; closeOverlay(); socket.emit('admin_start_game');
+        });
+
+        socket.on('connect', () => {
+            updateConnectionStatus('online');
+            socket.emit('join_admin');
+        });
+
+        socket.on('disconnect', () => {
+            updateConnectionStatus('offline');
+        });
+        
+        socket.on('connect_error', () => {
+             updateConnectionStatus('offline');
+        });
 
         socket.on('admin_update', (data) => {
-            currentPhase = data.phase;
-            currentQuestionData = data.current_question; 
+            isGameActive = data.game_active;
             
             if (data.game_active) {
-                endScreenDismissed = false;
+                closeOverlay(); endScreenDismissed = false; 
+            } else if (data.phase === 'finished' && !endScreenDismissed) {
+                if (data.final_results) renderEndScreen(data.final_results);
+                openOverlay();
+            } else if (data.phase === 'idle') {
+                closeOverlay();
             }
 
-            if (data.phase === 'finished' && data.final_results && !endScreenDismissed) {
-                showEndScreen(data.final_results);
-                return;
-            }
-
-            document.querySelector('.main-interface').style.display = 'block';
-            document.getElementById('gameEndOverlay').style.display = 'none';
-            stopFireworks();
-
+            updateControls(data);
             renderPlayers(data.players);
             renderQuestions(data.questions);
-            updateControls(data);
-            
+
             if (data.phase === 'question' || data.phase === 'idle') {
                 document.getElementById('answersSection').style.display = 'none';
                 document.getElementById('answersWall').innerHTML = '';
             }
             if (data.phase === 'question' && audioPlayer.paused && audioPlayer.currentTime === 0) {
-                 document.getElementById('adminOptionsContainer').style.display = 'none';
+                 document.getElementById('adminHintBox').style.display = 'none';
             }
         });
 
         socket.on('game_over', (data) => {
-            endScreenDismissed = false;
-            showEndScreen(data);
+            endScreenDismissed = false; renderEndScreen(data); openOverlay();
         });
-
-        function showEndScreen(data) {
-            document.querySelector('.main-interface').style.display = 'none';
-            document.getElementById('gameEndOverlay').style.display = 'block';
-            
-            const winners = data.winners || [];
-            if (winners.length > 0) {
-                document.getElementById('winnerText').innerText = winners.length > 1 ? "Победители:" : "Победитель:";
-                const names = winners.map(w => w.name).join(', ');
-                document.getElementById('finalWinnerName').innerText = names;
-                document.getElementById('finalWinnerScore').innerText = winners[0].score + " баллов";
-            } else {
-                document.getElementById('winnerText').innerText = "";
-                document.getElementById('finalWinnerName').innerText = "Нет победителя";
-                document.getElementById('finalWinnerScore').innerText = "";
-            }
-
-            const tbody = document.getElementById('finalLeaderboard');
-            tbody.innerHTML = '';
-            data.leaderboard.forEach((p, index) => {
-                tbody.innerHTML += `<tr><td>${index+1}</td><td>${p.name}</td><td>${p.score}</td></tr>`;
-            });
-            
-            startFireworks();
-        }
-
-        function restartGameFull() {
-            closeEndScreen();
-            startGame(); 
-        }
-
-        function closeEndScreen() {
-            endScreenDismissed = true;
-            stopFireworks(); 
-            document.getElementById('gameEndOverlay').style.display = 'none';
-            document.querySelector('.main-interface').style.display = 'block';
-        }
 
         socket.on('play_audio', (data) => {
-            if (data.file.includes("-1.mp3")) {
-                document.getElementById('adminOptionsContainer').style.display = 'none';
-            }
+            if (data.file.includes("-1.mp3")) document.getElementById('adminHintBox').style.display = 'none';
             audioPlayer.src = '/media/' + data.file;
-            audioPlayer.play();
+            audioPlayer.play().catch(console.error);
         });
-
-        audioPlayer.onended = function() {
-            if (currentPhase === 'question') {
-                socket.emit('admin_audio_finished');
-                if (currentQuestionData && currentQuestionData.type === 'choice') {
-                    showAdminOptions(currentQuestionData.options);
-                }
-            }
-        };
-
-        function showAdminOptions(options) {
-            const container = document.getElementById('adminOptionsContainer');
-            const list = document.getElementById('adminOptionsList');
-            list.innerHTML = '';
-            options.forEach(opt => {
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-secondary p-2 fs-6';
-                badge.innerText = opt;
-                list.appendChild(badge);
-            });
-            container.style.display = 'block';
-        }
+        
+        audioPlayer.onended = function() { socket.emit('admin_audio_finished'); };
 
         socket.on('round_results', (results) => {
             const section = document.getElementById('answersSection');
             const wall = document.getElementById('answersWall');
             wall.innerHTML = '';
             section.style.display = 'block';
-            if (results.length === 0) {
-                wall.innerHTML = '<p class="text-muted">Никто не дал ответа.</p>';
-            } else {
-                results.forEach(res => {
-                    const col = document.createElement('div');
-                    col.className = 'col-auto'; 
-                    const cardClass = res.is_correct ? 'ans-correct' : 'ans-wrong';
-                    const icon = res.is_correct ? '✅' : '❌';
-                    col.innerHTML = `<div class="card ans-card ${cardClass}" style="min-width: 160px; max-width: 250px;">
-                            <div class="card-body p-2 text-center">
-                                <h6 class="card-title fw-bold mb-1">${res.name}</h6>
-                                <p class="card-text m-0 text-break">${res.answer} ${icon}</p>
-                            </div></div>`;
-                    wall.appendChild(col);
-                });
+            if (!results || results.length === 0) {
+                wall.innerHTML = `<p class="text-white-50">${t('noAnswers')}</p>`; return;
             }
-            setTimeout(() => { section.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+            results.forEach(res => {
+                const div = document.createElement('div');
+                div.className = `ans-card ${res.is_correct ? 'ans-correct' : 'ans-wrong'}`;
+                div.innerHTML = `
+                    <div class="fw-bold mb-1">${res.name}</div>
+                    <div class="small" style="color:#cbd5e1">${res.answer}</div>
+                    <div class="mt-2">${res.is_correct ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</div>
+                `;
+                wall.appendChild(div);
+            });
+            section.scrollIntoView({behavior: "smooth"});
         });
+
+        window.updateStartButtonText = function() {
+            const span = document.getElementById('txtStartBtn');
+            if (!span) return;
+            if (isGameActive) {
+                btnStart.innerHTML = `<i class="fas fa-redo me-2"></i> <span id="txtStartBtn">${t('btnRestart')}</span>`;
+                btnStart.classList.remove('btn-purple-main');
+                btnStart.classList.add('btn-restart-mode');
+            } else {
+                btnStart.innerHTML = `<i class="fas fa-play me-2"></i> <span id="txtStartBtn">${t('btnStart')}</span>`;
+                btnStart.classList.add('btn-purple-main');
+                btnStart.classList.remove('btn-restart-mode');
+            }
+        };
+
+        function updateControls(data) {
+            updateStartButtonText();
+            btnStart.disabled = false;
+            document.getElementById('btnEnd').disabled = !data.game_active;
+            
+            const gc = document.getElementById('gameControls');
+            if (data.game_active) {
+                gc.style.display = 'block';
+                document.getElementById('qNum').innerText = data.current_index + 1;
+                
+                const isQ = (data.phase === 'question');
+                document.getElementById('btnNext').disabled = isQ;
+                document.getElementById('btnRepeat').disabled = !isQ;
+                document.getElementById('btnShow').disabled = !isQ;
+                
+                if (data.current_question) {
+                    const text = data.current_question.answer; 
+                    document.getElementById('adminHintText').innerText = text;
+                    if (data.phase !== 'question') document.getElementById('adminHintBox').style.display = 'block';
+                }
+                if (data.phase === 'finished') document.getElementById('qNum').innerText = "END";
+            } else {
+                gc.style.display = 'none';
+            }
+        }
 
         function renderPlayers(players) {
             const list = document.getElementById('playersList');
             document.getElementById('playerCount').innerText = players.length;
             list.innerHTML = '';
             players.forEach(p => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                li.innerHTML = `<span>${p.name} ${p.has_answered ? '<span class="answered-badge" title="Ответил"></span>' : ''}</span>
-                    <div class="d-flex align-items-center"><span class="badge bg-primary rounded-pill me-2">${p.score}</span>
-                    <div class="btn-group btn-group-sm"><button class="btn btn-outline-danger" onclick="takePoint('${p.id}')">-</button>
-                    <button class="btn btn-outline-success" onclick="givePoint('${p.id}')">+</button></div></div>`;
-                list.appendChild(li);
+                const div = document.createElement('div');
+                div.className = 'player-item d-flex justify-content-between align-items-center';
+                div.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <span class="fw-bold me-2" style="color: ${p.has_answered ? '#34d399' : '#e2e8f0'}">${p.name}</span>
+                        ${p.has_answered ? '<i class="fas fa-check-circle small" style="color:#34d399"></i>' : ''}
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="font-weight:bold; color: #a78bfa;">${p.score}</span>
+                        <div class="d-flex">
+                             <button class="score-control-btn btn-minus me-1" data-id="${p.id}"><i class="fas fa-minus"></i></button>
+                             <button class="score-control-btn btn-plus" data-id="${p.id}"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>`;
+                list.appendChild(div);
             });
+            document.querySelectorAll('.btn-minus').forEach(b => b.addEventListener('click', (e) => socket.emit('admin_take_point', {id: e.currentTarget.dataset.id})));
+            document.querySelectorAll('.btn-plus').forEach(b => b.addEventListener('click', (e) => socket.emit('admin_give_point', {id: e.currentTarget.dataset.id})));
         }
 
-        function givePoint(playerId) { socket.emit('admin_give_point', {id: playerId}); }
-        function takePoint(playerId) { socket.emit('admin_take_point', {id: playerId}); }
         function renderQuestions(questions) {
             const list = document.getElementById('questionsList');
             list.innerHTML = '';
-            questions.forEach((q, index) => {
+            if(!questions) return;
+            questions.forEach((q, i) => {
                 const li = document.createElement('li');
-                let styleClass = '', icon = '⚪';
-                if (q.status === 'done') { styleClass = 'q-done'; icon = '✅'; }
-                else if (q.status === 'current') { styleClass = 'q-current'; icon = '▶️'; }
-                let pointsText = '';
-                if(q.type === 'choice') pointsText = '<small class="text-muted ms-1">(1 б.)</small>';
-                else if(q.type === 'text') pointsText = '<small class="text-muted ms-1">(2 б.)</small>';
-                li.className = `list-group-item ${styleClass}`;
-                li.innerHTML = `${icon} Трек ${index + 1} ${pointsText}`;
+                li.className = q.status === 'done' ? 'q-done' : (q.status === 'current' ? 'q-current' : '');
+                let icon = q.status === 'current' ? '<i class="fas fa-volume-up me-1"></i>' : (q.status === 'done' ? '<i class="fas fa-check me-1"></i>' : '<span style="opacity:0.3; margin-right:5px">●</span>');
+                li.innerHTML = `${icon} ${t('track')} ${i+1}`;
                 list.appendChild(li);
             });
         }
-        function updateControls(data) {
-            document.getElementById('btnStart').disabled = data.game_active;
-            document.getElementById('btnEnd').disabled = !data.game_active;
-            const gc = document.getElementById('gameControls');
-            if (data.game_active) {
-                gc.style.display = 'block';
-                document.getElementById('qNum').innerText = data.current_index + 1;
-                const isQ = (data.phase === 'question');
-                document.getElementById('btnNext').disabled = isQ;
-                document.getElementById('btnRepeat').disabled = !isQ;
-                document.getElementById('btnShow').disabled = !isQ;
-                if(data.phase==='finished') document.getElementById('qNum').innerText = "Конец";
-            } else {
-                gc.style.display = 'none';
-                document.getElementById('adminOptionsContainer').style.display = 'none';
-                document.getElementById('answersSection').style.display = 'none';
-            }
+
+        function renderEndScreen(data) {
+            const winners = data.winners || [];
+            document.getElementById('finalWinnerName').innerText = winners.map(w => w.name).join(', ') || "-";
+            document.getElementById('winnerText').innerText = winners.length > 1 ? t('winnersTitle') : t('winnerTitle');
+            const tbody = document.getElementById('finalLeaderboard');
+            tbody.innerHTML = '';
+            data.leaderboard.forEach((p, i) => {
+                let colorStyle = i === 0 ? 'color: #f472b6; font-weight:bold;' : 'color: #e2e8f0;';
+                tbody.innerHTML += `<tr style="${colorStyle}"><td>${i+1}</td><td>${p.name}</td><td class="text-end">${p.score}</td></tr>`;
+            });
         }
-        function startGame() { socket.emit('admin_start_game'); }
-        function nextQuestion() { socket.emit('admin_next_question'); }
-        function repeatQuestion() { socket.emit('admin_repeat_question'); }
-        function showAnswer() { socket.emit('admin_show_answer'); }
-        function endGame() { socket.emit('admin_end_game'); }
 
-        // --- САЛЮТ С УПРАВЛЕНИЕМ ---
         function startFireworks() {
-            const canvas = document.getElementById('fireworksCanvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            let particles = [];
-
-            function Particle(x, y, color) {
-                this.x = x; this.y = y; this.color = color;
-                this.velocity = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
-                this.alpha = 1; this.friction = 0.96;
-            }
-            Particle.prototype.draw = function() {
-                ctx.globalAlpha = this.alpha;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            Particle.prototype.update = function() {
-                this.velocity.x *= this.friction; this.velocity.y *= this.friction;
-                this.x += this.velocity.x; this.y += this.velocity.y;
-                this.alpha -= 0.01;
-            }
-
+            const cvs = document.getElementById('fireworksCanvas');
+            if(animationId) return;
+            const ctx = cvs.getContext('2d');
+            cvs.width = window.innerWidth; cvs.height = window.innerHeight;
+            const particles = [];
             function animate() {
-                animationFrameId = requestAnimationFrame(animate); 
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                particles.forEach((p, i) => {
-                    if (p.alpha > 0) { p.update(); p.draw(); } 
-                    else particles.splice(i, 1);
-                });
-            }
-            
-            const interval = setInterval(() => {
-                if (!document.getElementById('gameEndOverlay').style.display === 'none') {
-                    clearInterval(interval);
-                    return;
+                animationId = requestAnimationFrame(animate);
+                ctx.fillStyle = 'rgba(15, 12, 41, 0.2)';
+                ctx.fillRect(0, 0, cvs.width, cvs.height);
+                if (Math.random() < 0.08) {
+                    const x = Math.random() * cvs.width; const y = Math.random() * cvs.height / 2;
+                    const hue = Math.random() > 0.5 ? Math.random() * 60 + 240 : Math.random() * 40 + 40; 
+                    const color = `hsl(${hue}, 80%, 60%)`;
+                    for(let i=0; i<40; i++) particles.push({x, y, color, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, alpha: 1});
                 }
-                const x = Math.random() * canvas.width;
-                const y = Math.random() * canvas.height / 2;
-                const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
-                for (let i = 0; i < 30; i++) particles.push(new Particle(x, y, color));
-            }, 800);
-            
+                for(let i=particles.length-1; i>=0; i--) {
+                    const p = particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 0.015;
+                    ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+                    if(p.alpha <= 0) particles.splice(i, 1);
+                }
+            }
             animate();
         }
-
         function stopFireworks() {
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
-            const canvas = document.getElementById('fireworksCanvas');
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (animationId) cancelAnimationFrame(animationId);
+            animationId = null;
+            const cvs = document.getElementById('fireworksCanvas');
+            if(cvs) cvs.getContext('2d').clearRect(0,0,cvs.width, cvs.height);
         }
+    });
     </script>
 </body>
 </html>
