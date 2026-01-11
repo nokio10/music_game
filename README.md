@@ -39,7 +39,7 @@ The project is built on WebSockets, ensuring instant synchronization across all 
 ### 1. Admin Panel (Host)
 The Admin Panel is the game's control center. It is recommended to open it on a laptop or tablet.
 
-![Admin Panel Screenshot](![alt text](image-1.png))
+![alt text](image-1.png)
 
 **Main Controls:**
 *   **Audio Player:** Top block. Plays the tracks.
@@ -62,7 +62,7 @@ The Admin Panel is the game's control center. It is recommended to open it on a 
 ### 2. Player Interface (Mobile)
 Players join the game via a browser. No downloads required.
 
-![Player Screens Screenshot](![alt text](image-2.png))
+![alt text](image-2.png)
 
 **Flow:**
 1.  **Login:** Player enters a nickname.
